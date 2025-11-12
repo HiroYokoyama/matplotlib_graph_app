@@ -13,7 +13,7 @@ class GraphApp(tk.Tk):
     def __init__(self):
         super().__init__()
         # 1. UI English: Window Title
-        self.title("Matplotlib Graphing App ver. 0.1.0")
+        self.title("Matplotlib Graphing App ver. 0.1.1")
         self.geometry("1600x900") # Keep window size
 
         self.df = None
@@ -276,6 +276,12 @@ class GraphApp(tk.Tk):
         self.y1_log_scale_var = tk.BooleanVar(value=False)
         self.y2_log_scale_var = tk.BooleanVar(value=False)
 
+        # (★ MODIFIED) Add Invert Axis Vars
+        self.x_invert_var = tk.BooleanVar(value=False)
+        self.y1_invert_var = tk.BooleanVar(value=False)
+        self.y2_invert_var = tk.BooleanVar(value=False)
+
+
     # --- Tab Creation Methods ---
     def create_basic_settings_tab(self, frame):
         # (★ MODIFIED) 6. Complete rewrite for layout change
@@ -306,15 +312,19 @@ class GraphApp(tk.Tk):
         
         ttk.Label(x_axis_frame, text="Label:").grid(row=0, column=0, padx=5, pady=5, sticky=tk.W)
         self.xlabel_entry = ttk.Entry(x_axis_frame, textvariable=self.xlabel_var, width=50)
-        self.xlabel_entry.grid(row=0, column=1, padx=5, pady=5, sticky=tk.EW)
+        self.xlabel_entry.grid(row=0, column=1, columnspan=2, padx=5, pady=5, sticky=tk.EW) # (★ MODIFIED) Change columnspan
         
         ttk.Label(x_axis_frame, text="Data:").grid(row=1, column=0, padx=5, pady=5, sticky=tk.W)
         self.x_axis_combo = ttk.Combobox(x_axis_frame, textvariable=self.x_axis_var, state='disabled', width=48)
-        self.x_axis_combo.grid(row=1, column=1, padx=5, pady=5, sticky=tk.EW)
+        self.x_axis_combo.grid(row=1, column=1, columnspan=2, padx=5, pady=5, sticky=tk.EW) # (★ MODIFIED) Change columnspan
         
         # (★ ADDED) Log scale checkbox
         self.x_log_scale_check = ttk.Checkbutton(x_axis_frame, text="Log Scale", variable=self.x_log_scale_var)
-        self.x_log_scale_check.grid(row=2, column=0, columnspan=2, padx=5, pady=5, sticky=tk.W)
+        self.x_log_scale_check.grid(row=2, column=0, padx=5, pady=5, sticky=tk.W) # (★ MODIFIED) Change grid
+        
+        # (★ MODIFIED) Add Invert X-Axis Checkbox here
+        self.x_invert_check = ttk.Checkbutton(x_axis_frame, text="Invert Axis", variable=self.x_invert_var)
+        self.x_invert_check.grid(row=2, column=1, padx=15, pady=5, sticky=tk.W) # Place next to log scale
         
         x_axis_frame.columnconfigure(1, weight=1)
 
@@ -332,9 +342,13 @@ class GraphApp(tk.Tk):
         
         # (★ ADDED) Log scale checkbox
         self.y1_log_scale_check = ttk.Checkbutton(y1_axis_frame, text="Log Scale", variable=self.y1_log_scale_var)
-        self.y1_log_scale_check.grid(row=0, column=2, padx=15, pady=5, sticky=tk.W) # Add to the right of label entry
+        self.y1_log_scale_check.grid(row=0, column=2, padx=15, pady=5, sticky=tk.W) # (★ MODIFIED) Change grid
         
-        ttk.Label(y1_axis_frame, text="Data (Multi-select):").grid(row=1, column=0, columnspan=3, padx=5, pady=5, sticky=tk.W)
+        # (★ MODIFIED) Add Invert Y1-Axis Checkbox here
+        self.y1_invert_check = ttk.Checkbutton(y1_axis_frame, text="Invert Axis", variable=self.y1_invert_var)
+        self.y1_invert_check.grid(row=0, column=3, padx=15, pady=5, sticky=tk.W) # Place next to log scale
+        
+        ttk.Label(y1_axis_frame, text="Data (Multi-select):").grid(row=1, column=0, columnspan=4, padx=5, pady=5, sticky=tk.W) # (★ MODIFIED) Change columnspan
         
         self.y_listbox_frame = ttk.Frame(y1_axis_frame)
         self.y_listbox_scroll = ttk.Scrollbar(self.y_listbox_frame, orient=tk.VERTICAL)
@@ -342,7 +356,7 @@ class GraphApp(tk.Tk):
         self.y_listbox_scroll.config(command=self.y_listbox.yview)
         self.y_listbox_scroll.pack(side=tk.RIGHT, fill=tk.Y)
         self.y_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        self.y_listbox_frame.grid(row=2, column=0, columnspan=3, padx=5, pady=5, sticky=tk.NSEW)
+        self.y_listbox_frame.grid(row=2, column=0, columnspan=4, padx=5, pady=5, sticky=tk.NSEW) # (★ MODIFIED) Change columnspan
         
         y1_axis_frame.columnconfigure(1, weight=1)
         y1_axis_frame.rowconfigure(2, weight=1)
@@ -357,9 +371,13 @@ class GraphApp(tk.Tk):
 
         # (★ ADDED) Log scale checkbox
         self.y2_log_scale_check = ttk.Checkbutton(y2_axis_frame, text="Log Scale", variable=self.y2_log_scale_var)
-        self.y2_log_scale_check.grid(row=0, column=2, padx=15, pady=5, sticky=tk.W) # Add to the right of label entry
+        self.y2_log_scale_check.grid(row=0, column=2, padx=15, pady=5, sticky=tk.W) # (★ MODIFIED) Change grid
 
-        ttk.Label(y2_axis_frame, text="Data (Multi-select):").grid(row=1, column=0, columnspan=3, padx=5, pady=5, sticky=tk.W)
+        # (★ MODIFIED) Add Invert Y2-Axis Checkbox here
+        self.y2_invert_check = ttk.Checkbutton(y2_axis_frame, text="Invert Axis", variable=self.y2_invert_var)
+        self.y2_invert_check.grid(row=0, column=3, padx=15, pady=5, sticky=tk.W) # Place next to log scale
+
+        ttk.Label(y2_axis_frame, text="Data (Multi-select):").grid(row=1, column=0, columnspan=4, padx=5, pady=5, sticky=tk.W) # (★ MODIFIED) Change columnspan
 
         self.y2_listbox_frame = ttk.Frame(y2_axis_frame)
         self.y2_listbox_scroll = ttk.Scrollbar(self.y2_listbox_frame, orient=tk.VERTICAL)
@@ -367,7 +385,7 @@ class GraphApp(tk.Tk):
         self.y2_listbox_scroll.config(command=self.y2_listbox.yview)
         self.y2_listbox_scroll.pack(side=tk.RIGHT, fill=tk.Y)
         self.y2_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        self.y2_listbox_frame.grid(row=2, column=0, columnspan=3, padx=5, pady=5, sticky=tk.NSEW)
+        self.y2_listbox_frame.grid(row=2, column=0, columnspan=4, padx=5, pady=5, sticky=tk.NSEW) # (★ MODIFIED) Change columnspan
 
         y2_axis_frame.columnconfigure(1, weight=1)
         y2_axis_frame.rowconfigure(2, weight=1)
@@ -532,7 +550,7 @@ class GraphApp(tk.Tk):
             text="Disable Scientific Notation", 
             variable=self.xaxis_plain_format_var)
         # (★ MODIFIED) 5. Move to new row
-        self.xaxis_plain_format_check.grid(row=3, column=0, columnspan=4, padx=5, pady=5, sticky=tk.W)
+        self.xaxis_plain_format_check.grid(row=3, column=0, columnspan=4, padx=5, pady=5, sticky=tk.W) # (★ MODIFIED) Revert columnspan
 
         ttk.Separator(frame, orient=tk.HORIZONTAL).grid(row=4, column=0, columnspan=5, sticky="ew", pady=10) # Shifted from 3 to 4
 
@@ -562,7 +580,7 @@ class GraphApp(tk.Tk):
             text="Disable Scientific Notation", 
             variable=self.yaxis1_plain_format_var)
         # (★ MODIFIED) 5. Move to new row
-        self.yaxis_plain_format_check.grid(row=8, column=0, columnspan=4, padx=5, pady=5, sticky=tk.W) # Shifted from 6 to 8
+        self.yaxis_plain_format_check.grid(row=8, column=0, columnspan=4, padx=5, pady=5, sticky=tk.W) # Shifted from 6 to 8 (★ MODIFIED) Revert columnspan
         
         ttk.Separator(frame, orient=tk.HORIZONTAL).grid(row=9, column=0, columnspan=5, sticky="ew", pady=10) # Shifted from 7 to 9
         
@@ -592,7 +610,7 @@ class GraphApp(tk.Tk):
             text="Disable Scientific Notation", 
             variable=self.yaxis2_plain_format_var)
         # (★ MODIFIED) 5. Move to new row
-        self.yaxis2_plain_format_check.grid(row=13, column=0, columnspan=4, padx=5, pady=5, sticky=tk.W) # Shifted from 10 to 13
+        self.yaxis2_plain_format_check.grid(row=13, column=0, columnspan=4, padx=5, pady=5, sticky=tk.W) # Shifted from 10 to 13 (★ MODIFIED) Revert columnspan
 
         # (★ MODIFIED) 1. Make column 4 expandable for the checkbox text
         frame.columnconfigure(4, weight=1)
@@ -676,6 +694,16 @@ class GraphApp(tk.Tk):
             
     def load_style_to_editor(self, series_name, is_y1):
         """ Helper to load a series' style into the 'current_style' vars """
+        if series_name is None:
+            # (★ MODIFIED) Clear editor
+            self.current_style_color_var.set("#000000")
+            self.current_style_linestyle_var.set("-")
+            self.current_style_marker_var.set("o")
+            self.current_style_linewidth_var.set(1.5)
+            self.current_style_alpha_var.set(1.0)
+            self.update_color_label(self.style_editor_color_label, "#000000")
+            return
+
         styles_dict = self.y1_series_styles if is_y1 else self.y2_series_styles
         
         # Get the style for this series, or create a default if it's new
@@ -924,9 +952,25 @@ class GraphApp(tk.Tk):
         )
         if not file_path:
             return
+
+        # (★ MODIFIED) Get the directory where the settings file will be saved
+        settings_dir = os.path.dirname(file_path)
+        if not settings_dir:
+            # If saving in the root or cwd, use "."
+            settings_dir = os.curdir 
+
+        # (★ MODIFIED) Calculate data path relative to the *settings file location*
+        relative_data_path = self.data_file_path
+        if self.data_file_path:
+            try:
+                # Calculate path relative to the settings directory
+                relative_data_path = os.path.relpath(self.data_file_path, start=settings_dir)
+            except ValueError:
+                # Fallback (e.g., paths on different drives in Windows)
+                relative_data_path = self.data_file_path # Save absolute path
             
         settings = {
-            "data_file_path": self.data_file_path,
+            "data_file_path": relative_data_path,
             "plot_type": self.plot_type_var.get(),
             "x_axis": self.x_axis_var.get(),
             "y_axis_indices": list(self.y_listbox.curselection()),
@@ -990,6 +1034,11 @@ class GraphApp(tk.Tk):
             "x_log_scale": self.x_log_scale_var.get(),
             "y1_log_scale": self.y1_log_scale_var.get(),
             "y2_log_scale": self.y2_log_scale_var.get(),
+
+            # (★ MODIFIED) Add Invert Axis settings
+            "x_invert": self.x_invert_var.get(),
+            "y1_invert": self.y1_invert_var.get(),
+            "y2_invert": self.y2_invert_var.get(),
         }
         
         try:
@@ -1011,6 +1060,11 @@ class GraphApp(tk.Tk):
         if not file_path:
             return
 
+        # (★ MODIFIED) Get the directory *from which* the settings file is loaded
+        settings_dir = os.path.dirname(file_path)
+        if not settings_dir:
+            settings_dir = os.curdir
+
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
                 settings = json.load(f)
@@ -1025,14 +1079,27 @@ class GraphApp(tk.Tk):
             messagebox.showerror("Error", "Settings file does not contain 'data_file_path'.")
             return
             
-        if not os.path.exists(settings['data_file_path']):
+        data_path_from_settings = settings['data_file_path']
+        if not data_path_from_settings:
+            # 1. UI English: Messagebox
+            messagebox.showerror("Error", "Settings file contains an empty 'data_file_path'.")
+            return
+
+        # (★ MODIFIED) Resolve the data path relative to the *settings file's directory*
+        # os.path.join(A, B) correctly handles if B is an absolute path (it just returns B)
+        # os.path.abspath() ensures the combined path is fully resolved
+        absolute_data_path = os.path.abspath(os.path.join(settings_dir, data_path_from_settings))
+            
+        if not os.path.exists(absolute_data_path):
             # 1. UI English: Messagebox
             messagebox.showwarning("Data File Not Found", 
-                                   f"The data file referenced in settings was not found:\n{settings['data_file_path']}\n\n"
+                                   f"The data file referenced in settings was not found:\n{data_path_from_settings}\n"
+                                   f"(Looked relative to: {settings_dir})\n"
+                                   f"(Resolved to: {absolute_data_path})\n\n"
                                    "Please load the correct data file manually, then load settings again if Y-axis selections are wrong.")
             pass
         else:
-             self.load_data(file_path=settings['data_file_path'])
+             self.load_data(file_path=absolute_data_path) # (★ MODIFIED) Use resolved path
         
         # 2. Apply settings to GUI (setters)
         self.set_variable_from_dict(self.plot_type_var, settings, 'plot_type')
@@ -1103,6 +1170,11 @@ class GraphApp(tk.Tk):
         self.set_variable_from_dict(self.x_log_scale_var, settings, 'x_log_scale')
         self.set_variable_from_dict(self.y1_log_scale_var, settings, 'y1_log_scale')
         self.set_variable_from_dict(self.y2_log_scale_var, settings, 'y2_log_scale')
+
+        # (★ MODIFIED) Load Invert Axis settings
+        self.set_variable_from_dict(self.x_invert_var, settings, 'x_invert')
+        self.set_variable_from_dict(self.y1_invert_var, settings, 'y1_invert')
+        self.set_variable_from_dict(self.y2_invert_var, settings, 'y2_invert')
 
         # Restore Listbox selections (only if data is loaded)
         if self.df is not None:
@@ -1389,6 +1461,12 @@ class GraphApp(tk.Tk):
             self.set_axis_limits(self.ax, 'x', self.xlim_min_var.get(), self.xlim_max_var.get())
             self.set_axis_limits(self.ax, 'y', self.ylim_min_var.get(), self.ylim_max_var.get())
 
+            # (★ MODIFIED) Apply Invert Axis (X, Y1)
+            if self.x_invert_var.get():
+                self.ax.invert_xaxis()
+            if self.y1_invert_var.get():
+                self.ax.invert_yaxis()
+
             # Tick settings (X, Y1)
             self.ax.tick_params(axis='x', which='both', 
                                 direction=self.xtick_direction_var.get(), 
@@ -1431,6 +1509,11 @@ class GraphApp(tk.Tk):
                 # (★ MODIFIED) 4. Apply font family explicitly
                 self.ax2.set_ylabel(self.ylabel2_var.get() if self.ylabel2_var.get() else ", ".join(y_cols_2), fontsize=self.ylabel2_fontsize_var.get(), fontfamily=font_family)
                 self.set_axis_limits(self.ax2, 'y', self.ylim2_min_var.get(), self.ylim2_max_var.get())
+                
+                # (★ MODIFIED) Apply Invert Axis (Y2)
+                if self.y2_invert_var.get():
+                    self.ax2.invert_yaxis()
+                
                 self.ax2.tick_params(axis='y', which='both',
                                      direction=self.ytick2_direction_var.get(),
                                      right=self.ytick2_show_var.get(),
@@ -1524,4 +1607,3 @@ class GraphApp(tk.Tk):
 if __name__ == "__main__":
     app = GraphApp()
     app.mainloop()
-
