@@ -5,6 +5,7 @@ from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 import matplotlib.font_manager as fm
 import matplotlib
+import matplotlib.ticker as ticker # (★ ADDED) Ticker
 import os
 import json
 from tksheet import Sheet # Import tksheet
@@ -13,7 +14,7 @@ class GraphApp(tk.Tk):
     def __init__(self):
         super().__init__()
         # 1. UI English: Window Title
-        self.title("Matplotlib Graphing App ver. 0.1.1")
+        self.title("Matplotlib Graphing App ver. 0.1.2") # (★ MODIFIED) Version
         self.geometry("1600x900") # Keep window size
 
         self.df = None
@@ -258,6 +259,11 @@ class GraphApp(tk.Tk):
         self.xaxis_plain_format_var = tk.BooleanVar(value=False)
         self.yaxis1_plain_format_var = tk.BooleanVar(value=False) # Renamed
         self.yaxis2_plain_format_var = tk.BooleanVar(value=False)
+        
+        # (★ ADDED) Ticker interval vars
+        self.xtick_major_interval_var = tk.StringVar()
+        self.ytick_major_interval_var = tk.StringVar()
+        self.ytick2_major_interval_var = tk.StringVar()
         
         # Spines/BG
         self.spine_top_var = tk.BooleanVar(value=True)
@@ -534,14 +540,20 @@ class GraphApp(tk.Tk):
         self.xlim_max_entry = ttk.Entry(frame, textvariable=self.xlim_max_var, width=10)
         self.xlim_max_entry.grid(row=1, column=3, padx=5, pady=5)
         
-        ttk.Label(frame, text="Tick Direction:").grid(row=2, column=0, padx=5, pady=5, sticky=tk.W)
+        # (★ ADDED) X-Axis Major Ticks (★ MODIFIED) Moved to row 2
+        ttk.Label(frame, text="Major Tick Interval:").grid(row=2, column=0, padx=5, pady=5, sticky=tk.W) # New row 2
+        self.xtick_major_interval_entry = ttk.Entry(frame, textvariable=self.xtick_major_interval_var, width=10)
+        self.xtick_major_interval_entry.grid(row=2, column=1, padx=5, pady=5)
+        ttk.Label(frame, text="(Linear scale only)").grid(row=2, column=2, padx=5, pady=5, sticky=tk.W) # Note
+
+        ttk.Label(frame, text="Tick Direction:").grid(row=3, column=0, padx=5, pady=5, sticky=tk.W) # (★ MODIFIED) Moved to row 3
         self.xtick_direction_combo = ttk.Combobox(frame, textvariable=self.xtick_direction_var, 
                                                   values=['out', 'in', 'inout'], state='readonly', width=8)
-        self.xtick_direction_combo.grid(row=2, column=1, padx=5, pady=5, sticky=tk.W)
+        self.xtick_direction_combo.grid(row=3, column=1, padx=5, pady=5, sticky=tk.W) # (★ MODIFIED) Moved to row 3
         self.xtick_show_check = ttk.Checkbutton(frame, text="Show Ticks", variable=self.xtick_show_var)
-        self.xtick_show_check.grid(row=2, column=2, padx=5, pady=5, sticky=tk.W)
+        self.xtick_show_check.grid(row=3, column=2, padx=5, pady=5, sticky=tk.W) # (★ MODIFIED) Moved to row 3
         self.xtick_label_show_check = ttk.Checkbutton(frame, text="Show Labels", variable=self.xtick_label_show_var)
-        self.xtick_label_show_check.grid(row=2, column=3, padx=5, pady=5, sticky=tk.W)
+        self.xtick_label_show_check.grid(row=3, column=3, padx=5, pady=5, sticky=tk.W) # (★ MODIFIED) Moved to row 3
         
         # (★ MODIFIED) 1. Add X-Axis scientific notation checkbox
         # (★ MODIFIED) 3. Update text, remove 'e.g.'
@@ -550,28 +562,34 @@ class GraphApp(tk.Tk):
             text="Disable Scientific Notation", 
             variable=self.xaxis_plain_format_var)
         # (★ MODIFIED) 5. Move to new row
-        self.xaxis_plain_format_check.grid(row=3, column=0, columnspan=4, padx=5, pady=5, sticky=tk.W) # (★ MODIFIED) Revert columnspan
+        self.xaxis_plain_format_check.grid(row=4, column=0, columnspan=4, padx=5, pady=5, sticky=tk.W) # (★ MODIFIED) Moved to row 4
 
-        ttk.Separator(frame, orient=tk.HORIZONTAL).grid(row=4, column=0, columnspan=5, sticky="ew", pady=10) # Shifted from 3 to 4
+        ttk.Separator(frame, orient=tk.HORIZONTAL).grid(row=5, column=0, columnspan=5, sticky="ew", pady=10) # Shifted from 4 to 5
 
         # --- Y-Axis (Left) ---
-        ttk.Label(frame, text="Y-Axis (Left)", font=("-weight bold")).grid(row=5, column=0, sticky=tk.W, pady=5) # Shifted from 4 to 5
+        ttk.Label(frame, text="Y-Axis (Left)", font=("-weight bold")).grid(row=6, column=0, sticky=tk.W, pady=5) # Shifted from 5 to 6
         
-        ttk.Label(frame, text="Range (Min):").grid(row=6, column=0, padx=5, pady=5, sticky=tk.W) # Shifted from 5 to 6
+        ttk.Label(frame, text="Range (Min):").grid(row=7, column=0, padx=5, pady=5, sticky=tk.W) # Shifted from 6 to 7
         self.ylim_min_entry = ttk.Entry(frame, textvariable=self.ylim_min_var, width=10)
-        self.ylim_min_entry.grid(row=6, column=1, padx=5, pady=5) # Shifted from 5 to 6
-        ttk.Label(frame, text="Range (Max):").grid(row=6, column=2, padx=5, pady=5, sticky=tk.W) # Shifted from 5 to 6
+        self.ylim_min_entry.grid(row=7, column=1, padx=5, pady=5) # Shifted from 6 to 7
+        ttk.Label(frame, text="Range (Max):").grid(row=7, column=2, padx=5, pady=5, sticky=tk.W) # Shifted from 6 to 7
         self.ylim_max_entry = ttk.Entry(frame, textvariable=self.ylim_max_var, width=10)
-        self.ylim_max_entry.grid(row=6, column=3, padx=5, pady=5) # Shifted from 5 to 6
+        self.ylim_max_entry.grid(row=7, column=3, padx=5, pady=5) # Shifted from 6 to 7
         
-        ttk.Label(frame, text="Tick Direction:").grid(row=7, column=0, padx=5, pady=5, sticky=tk.W) # Shifted from 6 to 7
+        # (★ ADDED) Y-Axis Major Ticks (★ MODIFIED) Moved to row 8
+        ttk.Label(frame, text="Major Tick Interval:").grid(row=8, column=0, padx=5, pady=5, sticky=tk.W) # New row 8
+        self.ytick_major_interval_entry = ttk.Entry(frame, textvariable=self.ytick_major_interval_var, width=10)
+        self.ytick_major_interval_entry.grid(row=8, column=1, padx=5, pady=5)
+        ttk.Label(frame, text="(Linear scale only)").grid(row=8, column=2, padx=5, pady=5, sticky=tk.W) # Note
+
+        ttk.Label(frame, text="Tick Direction:").grid(row=9, column=0, padx=5, pady=5, sticky=tk.W) # (★ MODIFIED) Moved to row 9
         self.ytick_direction_combo = ttk.Combobox(frame, textvariable=self.ytick_direction_var, 
                                                   values=['out', 'in', 'inout'], state='readonly', width=8)
-        self.ytick_direction_combo.grid(row=7, column=1, padx=5, pady=5, sticky=tk.W) # Shifted from 6 to 7
+        self.ytick_direction_combo.grid(row=9, column=1, padx=5, pady=5, sticky=tk.W) # (★ MODIFIED) Moved to row 9
         self.ytick_show_check = ttk.Checkbutton(frame, text="Show Ticks", variable=self.ytick_show_var)
-        self.ytick_show_check.grid(row=7, column=2, padx=5, pady=5, sticky=tk.W) # Shifted from 6 to 7
+        self.ytick_show_check.grid(row=9, column=2, padx=5, pady=5, sticky=tk.W) # (★ MODIFIED) Moved to row 9
         self.ytick_label_show_check = ttk.Checkbutton(frame, text="Show Labels", variable=self.ytick_label_show_var)
-        self.ytick_label_show_check.grid(row=7, column=3, padx=5, pady=5, sticky=tk.W) # Shifted from 6 to 7
+        self.ytick_label_show_check.grid(row=9, column=3, padx=5, pady=5, sticky=tk.W) # (★ MODIFIED) Moved to row 9
 
         # (★ MODIFIED) 1. Scientific Notation Fix: Add Checkbox, change text, change variable
         # (★ MODIFIED) 3. Update text, remove 'e.g.'
@@ -580,28 +598,34 @@ class GraphApp(tk.Tk):
             text="Disable Scientific Notation", 
             variable=self.yaxis1_plain_format_var)
         # (★ MODIFIED) 5. Move to new row
-        self.yaxis_plain_format_check.grid(row=8, column=0, columnspan=4, padx=5, pady=5, sticky=tk.W) # Shifted from 6 to 8 (★ MODIFIED) Revert columnspan
+        self.yaxis_plain_format_check.grid(row=10, column=0, columnspan=4, padx=5, pady=5, sticky=tk.W) # (★ MODIFIED) Moved to row 10
         
-        ttk.Separator(frame, orient=tk.HORIZONTAL).grid(row=9, column=0, columnspan=5, sticky="ew", pady=10) # Shifted from 7 to 9
+        ttk.Separator(frame, orient=tk.HORIZONTAL).grid(row=11, column=0, columnspan=5, sticky="ew", pady=10) # Shifted from 9 to 11
         
         # --- Y-Axis (Right) ---
-        ttk.Label(frame, text="Y-Axis (Right)", font=("-weight bold")).grid(row=10, column=0, sticky=tk.W, pady=5) # Shifted from 8 to 10
+        ttk.Label(frame, text="Y-Axis (Right)", font=("-weight bold")).grid(row=12, column=0, sticky=tk.W, pady=5) # Shifted from 10 to 12
         
-        ttk.Label(frame, text="Range (Min):").grid(row=11, column=0, padx=5, pady=5, sticky=tk.W) # Shifted from 9 to 11
+        ttk.Label(frame, text="Range (Min):").grid(row=13, column=0, padx=5, pady=5, sticky=tk.W) # Shifted from 11 to 13
         self.ylim2_min_entry = ttk.Entry(frame, textvariable=self.ylim2_min_var, width=10)
-        self.ylim2_min_entry.grid(row=11, column=1, padx=5, pady=5) # Shifted from 9 to 11
-        ttk.Label(frame, text="Range (Max):").grid(row=11, column=2, padx=5, pady=5, sticky=tk.W) # Shifted from 9 to 11
+        self.ylim2_min_entry.grid(row=13, column=1, padx=5, pady=5) # Shifted from 11 to 13
+        ttk.Label(frame, text="Range (Max):").grid(row=13, column=2, padx=5, pady=5, sticky=tk.W) # Shifted from 11 to 13
         self.ylim2_max_entry = ttk.Entry(frame, textvariable=self.ylim2_max_var, width=10)
-        self.ylim2_max_entry.grid(row=11, column=3, padx=5, pady=5) # Shifted from 9 to 11
+        self.ylim2_max_entry.grid(row=13, column=3, padx=5, pady=5) # Shifted from 11 to 13
         
-        ttk.Label(frame, text="Tick Direction:").grid(row=12, column=0, padx=5, pady=5, sticky=tk.W) # Shifted from 10 to 12
+        # (★ ADDED) Y2-Axis Major Ticks (★ MODIFIED) Moved to row 14
+        ttk.Label(frame, text="Major Tick Interval:").grid(row=14, column=0, padx=5, pady=5, sticky=tk.W) # New row 14
+        self.ytick2_major_interval_entry = ttk.Entry(frame, textvariable=self.ytick2_major_interval_var, width=10)
+        self.ytick2_major_interval_entry.grid(row=14, column=1, padx=5, pady=5)
+        ttk.Label(frame, text="(Linear scale only)").grid(row=14, column=2, padx=5, pady=5, sticky=tk.W) # Note
+
+        ttk.Label(frame, text="Tick Direction:").grid(row=15, column=0, padx=5, pady=5, sticky=tk.W) # (★ MODIFIED) Moved to row 15
         self.ytick2_direction_combo = ttk.Combobox(frame, textvariable=self.ytick2_direction_var, 
                                                   values=['out', 'in', 'inout'], state='readonly', width=8)
-        self.ytick2_direction_combo.grid(row=12, column=1, padx=5, pady=5, sticky=tk.W) # Shifted from 10 to 12
+        self.ytick2_direction_combo.grid(row=15, column=1, padx=5, pady=5, sticky=tk.W) # (★ MODIFIED) Moved to row 15
         self.ytick2_show_check = ttk.Checkbutton(frame, text="Show Ticks", variable=self.ytick2_show_var)
-        self.ytick2_show_check.grid(row=12, column=2, padx=5, pady=5, sticky=tk.W) # Shifted from 10 to 12
+        self.ytick2_show_check.grid(row=15, column=2, padx=5, pady=5, sticky=tk.W) # (★ MODIFIED) Moved to row 15
         self.ytick2_label_show_check = ttk.Checkbutton(frame, text="Show Labels", variable=self.ytick2_label_show_var)
-        self.ytick2_label_show_check.grid(row=12, column=3, padx=5, pady=5, sticky=tk.W) # Shifted from 10 to 12
+        self.ytick2_label_show_check.grid(row=15, column=3, padx=5, pady=5, sticky=tk.W) # (★ MODIFIED) Moved to row 15
         
         # (★ MODIFIED) 1. Add Y2-Axis scientific notation checkbox
         # (★ MODIFIED) 3. Update text, remove 'e.g.'
@@ -610,7 +634,7 @@ class GraphApp(tk.Tk):
             text="Disable Scientific Notation", 
             variable=self.yaxis2_plain_format_var)
         # (★ MODIFIED) 5. Move to new row
-        self.yaxis2_plain_format_check.grid(row=13, column=0, columnspan=4, padx=5, pady=5, sticky=tk.W) # Shifted from 10 to 13 (★ MODIFIED) Revert columnspan
+        self.yaxis2_plain_format_check.grid(row=16, column=0, columnspan=4, padx=5, pady=5, sticky=tk.W) # (★ MODIFIED) Moved to row 16
 
         # (★ MODIFIED) 1. Make column 4 expandable for the checkbox text
         frame.columnconfigure(4, weight=1)
@@ -1020,6 +1044,11 @@ class GraphApp(tk.Tk):
             "yaxis1_plain_format": self.yaxis1_plain_format_var.get(),
             "yaxis2_plain_format": self.yaxis2_plain_format_var.get(),
             
+            # (★ ADDED) Ticker intervals
+            "xtick_major_interval": self.xtick_major_interval_var.get(),
+            "ytick_major_interval": self.ytick_major_interval_var.get(),
+            "ytick2_major_interval": self.ytick2_major_interval_var.get(),
+            
             "spine_top": self.spine_top_var.get(),
             "spine_bottom": self.spine_bottom_var.get(),
             "spine_left": self.spine_left_var.get(),
@@ -1155,6 +1184,11 @@ class GraphApp(tk.Tk):
         self.set_variable_from_dict(self.xaxis_plain_format_var, settings, 'xaxis_plain_format')
         self.set_variable_from_dict(self.yaxis1_plain_format_var, settings, 'yaxis1_plain_format', fallback_key='yaxis_plain_format')
         self.set_variable_from_dict(self.yaxis2_plain_format_var, settings, 'yaxis2_plain_format')
+
+        # (★ ADDED) Load Ticker intervals
+        self.set_variable_from_dict(self.xtick_major_interval_var, settings, 'xtick_major_interval')
+        self.set_variable_from_dict(self.ytick_major_interval_var, settings, 'ytick_major_interval')
+        self.set_variable_from_dict(self.ytick2_major_interval_var, settings, 'ytick2_major_interval')
 
         self.set_variable_from_dict(self.spine_top_var, settings, 'spine_top')
         self.set_variable_from_dict(self.spine_bottom_var, settings, 'spine_bottom')
@@ -1490,6 +1524,9 @@ class GraphApp(tk.Tk):
             if self.yaxis1_plain_format_var.get():
                 self.ax.ticklabel_format(style='plain', axis='y', useOffset=False)
 
+            # (★ ADDED) Apply Major Ticker Intervals (if linear scale)
+            self.apply_major_ticker(self.ax.xaxis, self.xtick_major_interval_var.get(), self.x_log_scale_var.get())
+            self.apply_major_ticker(self.ax.yaxis, self.ytick_major_interval_var.get(), self.y1_log_scale_var.get())
                                 
             # Spines and Background Color (Axes)
             self.ax.set_facecolor(self.face_color_var.get())
@@ -1527,6 +1564,9 @@ class GraphApp(tk.Tk):
                 # (★ MODIFIED) 1. Scientific Notation Fix: Apply plain format if checked
                 if self.yaxis2_plain_format_var.get():
                     self.ax2.ticklabel_format(style='plain', axis='y', useOffset=False)
+                
+                # (★ ADDED) Apply Major Ticker Intervals (if linear scale)
+                self.apply_major_ticker(self.ax2.yaxis, self.ytick2_major_interval_var.get(), self.y2_log_scale_var.get())
                 
                 # Right spine visibility controlled by ax2
                 self.ax.spines['right'].set_visible(False)
@@ -1583,6 +1623,19 @@ class GraphApp(tk.Tk):
         except ValueError:
             pass # Ignore if conversion fails
 
+    # (★ ADDED) Helper method to apply major ticker
+    def apply_major_ticker(self, axis, interval_str, is_log_scale):
+        """ Apply MultipleLocator if interval_str is valid float and scale is linear """
+        if is_log_scale:
+            return # Do not apply custom interval on log scale
+
+        try:
+            interval = float(interval_str)
+            if interval > 0:
+                axis.set_major_locator(ticker.MultipleLocator(interval))
+        except (ValueError, TypeError):
+            pass # Ignore if empty, invalid, or None
+
     def export_graph(self):
         # 1. UI English: Dialog title
         file_path = filedialog.asksaveasfilename(
@@ -1607,3 +1660,5 @@ class GraphApp(tk.Tk):
 if __name__ == "__main__":
     app = GraphApp()
     app.mainloop()
+
+    
