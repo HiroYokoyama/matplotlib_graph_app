@@ -1,2 +1,3 @@
 [console_scripts]
 hygrapher = hygrapher.__main__:main
+hygrapher-3d = hygrapher.main_3d:main

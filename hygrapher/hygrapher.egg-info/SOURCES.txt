@@ -2,6 +2,7 @@ pyproject.toml
 hygrapher/__init__.py
 hygrapher/__main__.py
 hygrapher/main.py
+hygrapher/main_3d.py
 hygrapher.egg-info/PKG-INFO
 hygrapher.egg-info/SOURCES.txt
 hygrapher.egg-info/dependency_links.txt

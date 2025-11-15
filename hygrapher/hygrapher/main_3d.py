@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-hygrapher
+hygrapher-3D
 
 Author: Hiromichi Yokoyama
 License: Apache-2.0 license
@@ -14,13 +14,13 @@ VERSION = "0.5.2"
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, colorchooser
 import pandas as pd
-import numpy as np
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 import matplotlib.font_manager as fm
 import matplotlib
 import matplotlib.ticker as ticker
-from scipy.interpolate import griddata
+from mpl_toolkits.mplot3d import Axes3D
+import numpy as np
 import os
 import json
 from tksheet import Sheet
@@ -39,7 +39,7 @@ class GraphApp(BASE_CLASS):
     def __init__(self):
         super().__init__()
         # 1. UI English: Window Title
-        self.title(f"HYGrapher ver. {VERSION}")
+        self.title(f"HYGrapher 3D ver. {VERSION}")
         self.geometry("1600x900") # Keep window size
 
         self.df = None
@@ -58,8 +58,8 @@ class GraphApp(BASE_CLASS):
 
         # --- Figure ---
         self.fig = Figure(figsize=(self.fig_width_var.get(), self.fig_height_var.get()), dpi=100)
-        self.ax = self.fig.add_subplot(111)
-        self.ax2 = None # For 2nd Y-axis
+        self.ax = self.fig.add_subplot(111, projection='3d')
+        self.ax2 = None # For 2nd Z-axis (not typically used in 3D)
 
         # === Menu Bar ===
         menubar = tk.Menu(self)
@@ -77,7 +77,7 @@ class GraphApp(BASE_CLASS):
         file_menu.add_command(label="Export Graph...", command=self.export_graph, accelerator="")
         file_menu.add_command(label="Export Data (CSV)...", command=self.export_filtered_data, accelerator="")
         file_menu.add_separator()
-        file_menu.add_command(label="Open in 3D Mode...", command=self.open_in_3d_mode, accelerator="")
+        file_menu.add_command(label="Open in 2D Mode...", command=self.open_in_2d_mode, accelerator="")
         file_menu.add_separator()
         file_menu.add_command(label="Exit", command=self.quit, accelerator="")
         
@@ -316,18 +316,17 @@ class GraphApp(BASE_CLASS):
 
     def create_all_tk_variables(self):
         # Basic
-        self.plot_type_var = tk.StringVar(value="line")
+        self.plot_type_var = tk.StringVar(value="surface")
         self.x_axis_var = tk.StringVar()
+        self.y_axis_var = tk.StringVar()
+        self.z_axis_var = tk.StringVar()
         self.title_var = tk.StringVar()
         self.xlabel_var = tk.StringVar()
         self.ylabel_var = tk.StringVar()
-        self.ylabel2_var = tk.StringVar()
+        self.zlabel_var = tk.StringVar()
         
-        # --- (★ Style Refactor) ---
-        # Remove axis-level style variables (e.g., linestyle_y1_var)
-        # Add dictionaries to hold styles per series (by column name)
+        # Style dictionary for Z-axis series
         self.y1_series_styles = {}
-        self.y2_series_styles = {}
 
         # ★ 1. Consolidate: Remove separate target vars
         # self.y1_style_target_var = tk.StringVar()
@@ -352,9 +351,8 @@ class GraphApp(BASE_CLASS):
         self.title_fontsize_var = tk.DoubleVar(value=16.0)
         self.xlabel_fontsize_var = tk.DoubleVar(value=14.0)
         self.ylabel_fontsize_var = tk.DoubleVar(value=14.0)
-        self.ylabel2_fontsize_var = tk.DoubleVar(value=14.0)
+        self.zlabel_fontsize_var = tk.DoubleVar(value=14.0)
         self.tick_fontsize_var = tk.DoubleVar(value=14.0)
-        self.tick2_fontsize_var = tk.DoubleVar(value=14.0)
         self.fig_width_var = tk.DoubleVar(value=7.0)
         self.fig_height_var = tk.DoubleVar(value=6.0)
         
@@ -363,25 +361,25 @@ class GraphApp(BASE_CLASS):
         self.xlim_max_var = tk.StringVar()
         self.ylim_min_var = tk.StringVar()
         self.ylim_max_var = tk.StringVar()
-        self.ylim2_min_var = tk.StringVar()
-        self.ylim2_max_var = tk.StringVar()
+        self.zlim_min_var = tk.StringVar()
+        self.zlim_max_var = tk.StringVar()
         self.xtick_show_var = tk.BooleanVar(value=True)
         self.xtick_label_show_var = tk.BooleanVar(value=True)
         self.xtick_direction_var = tk.StringVar(value='out')
         self.ytick_show_var = tk.BooleanVar(value=True)
         self.ytick_label_show_var = tk.BooleanVar(value=True)
         self.ytick_direction_var = tk.StringVar(value='out')
-        self.ytick2_show_var = tk.BooleanVar(value=True)
-        self.ytick2_label_show_var = tk.BooleanVar(value=True)
-        self.ytick2_direction_var = tk.StringVar(value='out')
+        self.ztick_show_var = tk.BooleanVar(value=True)
+        self.ztick_label_show_var = tk.BooleanVar(value=True)
+        self.ztick_direction_var = tk.StringVar(value='out')
         
         self.xaxis_plain_format_var = tk.BooleanVar(value=False)
-        self.yaxis1_plain_format_var = tk.BooleanVar(value=False) # Renamed
-        self.yaxis2_plain_format_var = tk.BooleanVar(value=False)
+        self.yaxis_plain_format_var = tk.BooleanVar(value=False)
+        self.zaxis_plain_format_var = tk.BooleanVar(value=False)
         
         self.xtick_major_interval_var = tk.StringVar()
         self.ytick_major_interval_var = tk.StringVar()
-        self.ytick2_major_interval_var = tk.StringVar()
+        self.ztick_major_interval_var = tk.StringVar()
         
         # Spines/BG
         self.spine_top_var = tk.BooleanVar(value=True)
@@ -395,31 +393,27 @@ class GraphApp(BASE_CLASS):
         self.legend_show_var = tk.BooleanVar(value=False)
         self.legend_loc_var = tk.StringVar(value='best')
 
-        # (★ ADDED) Log Scale Vars
+        # Log Scale Vars for 3D
         self.x_log_scale_var = tk.BooleanVar(value=False)
-        self.y1_log_scale_var = tk.BooleanVar(value=False)
-        self.y2_log_scale_var = tk.BooleanVar(value=False)
+        self.y_log_scale_var = tk.BooleanVar(value=False)
+        self.z_log_scale_var = tk.BooleanVar(value=False)
 
         self.x_invert_var = tk.BooleanVar(value=False)
-        self.y1_invert_var = tk.BooleanVar(value=False)
-        self.y2_invert_var = tk.BooleanVar(value=False)
+        self.y_invert_var = tk.BooleanVar(value=False)
+        self.z_invert_var = tk.BooleanVar(value=False)
 
-        self.enable_smoothing_var = tk.BooleanVar(value=False)
-        self.smoothing_window_var = tk.IntVar(value=5)
-        self.enable_errorbar_var = tk.BooleanVar(value=False)
-        self.errorbar_column_var = tk.StringVar()
-        self.enable_annotation_var = tk.BooleanVar(value=False)
-        
-        self.data_filter_enabled_var = tk.BooleanVar(value=False)
-        self.filter_min_var = tk.StringVar()
-        self.filter_max_var = tk.StringVar()
-        self.filter_column_var = tk.StringVar()
+        # Grid settings for 3D
         self.grid_alpha_var = tk.DoubleVar(value=0.3)
-        self.grid_linestyle_var = tk.StringVar(value='--')
-        self.grid_linewidth_var = tk.DoubleVar(value=0.5)
-        self.subplot_mode_var = tk.BooleanVar(value=False)
-        self.rotate_labels_var = tk.BooleanVar(value=False)
-        self.rotation_angle_var = tk.IntVar(value=45)
+        
+        # 3D View angles
+        self.view_elev_var = tk.IntVar(value=30)
+        self.view_azim_var = tk.IntVar(value=-60)
+        
+        # Mesh resolution for surface/wireframe
+        self.mesh_resolution_var = tk.IntVar(value=50)
+        
+        # Colormap for surface/contour
+        self.colormap_var = tk.StringVar(value='viridis')
 
 
     # --- Tab Creation Methods ---
@@ -436,7 +430,7 @@ class GraphApp(BASE_CLASS):
 
         ttk.Label(top_settings_frame, text="Plot Type:").grid(row=1, column=0, padx=3, pady=2, sticky=tk.W)
         self.plot_type_combo = ttk.Combobox(top_settings_frame, textvariable=self.plot_type_var, 
-                                            values=["line", "scatter", "bar", "step", "stem", "area", "pie", "box", "violin", "heatmap", "contour", "polar"], state='readonly', width=24)
+                                            values=["surface", "wireframe", "scatter3d", "line3d", "contour3d"], state='readonly', width=24)
         self.plot_type_combo.grid(row=1, column=1, columnspan=3, padx=3, pady=2, sticky=tk.EW)
         
         top_settings_frame.columnconfigure(1, weight=1)
@@ -470,60 +464,52 @@ class GraphApp(BASE_CLASS):
         y_axis_paned_window = ttk.PanedWindow(axis_frames_container, orient=tk.HORIZONTAL)
         y_axis_paned_window.pack(fill=tk.X, expand=False, padx=3, pady=2)
 
-        # --- Y-Axis (Left) Frame ---
-        y1_axis_frame = ttk.LabelFrame(y_axis_paned_window, text="Y-Axis (Left)")
-        y_axis_paned_window.add(y1_axis_frame, weight=1)
+        # --- Y-Axis Frame ---
+        y_axis_frame = ttk.LabelFrame(axis_frames_container, text="Y-Axis")
+        y_axis_frame.pack(fill=tk.X, padx=3, pady=2)
         
-        ttk.Label(y1_axis_frame, text="Label:").grid(row=0, column=0, padx=2, pady=1, sticky=tk.W)
-        self.ylabel_entry = ttk.Entry(y1_axis_frame, textvariable=self.ylabel_var, width=24)
-        self.ylabel_entry.grid(row=0, column=1, padx=2, pady=1, sticky=tk.EW)
+        ttk.Label(y_axis_frame, text="Label:").grid(row=0, column=0, padx=2, pady=1, sticky=tk.W)
+        self.ylabel_entry = ttk.Entry(y_axis_frame, textvariable=self.ylabel_var, width=25)
+        self.ylabel_entry.grid(row=0, column=1, columnspan=2, padx=2, pady=1, sticky=tk.EW)
         
-        self.y1_log_scale_check = ttk.Checkbutton(y1_axis_frame, text="Log Scale", variable=self.y1_log_scale_var)
-        self.y1_log_scale_check.grid(row=0, column=2, padx=5, pady=1, sticky=tk.W) 
+        ttk.Label(y_axis_frame, text="Data:").grid(row=1, column=0, padx=2, pady=1, sticky=tk.W)
+        self.y_axis_combo = ttk.Combobox(y_axis_frame, textvariable=self.y_axis_var, state='disabled', width=24)
+        self.y_axis_combo.grid(row=1, column=1, columnspan=2, padx=2, pady=1, sticky=tk.EW)
         
-        self.y1_invert_check = ttk.Checkbutton(y1_axis_frame, text="Invert Axis", variable=self.y1_invert_var)
-        self.y1_invert_check.grid(row=0, column=3, padx=5, pady=1, sticky=tk.W) # Place next to log scale
+        self.y_log_scale_check = ttk.Checkbutton(y_axis_frame, text="Log Scale", variable=self.y_log_scale_var)
+        self.y_log_scale_check.grid(row=2, column=0, padx=2, pady=1, sticky=tk.W)
         
-        ttk.Label(y1_axis_frame, text="Data (Multi-select):").grid(row=1, column=0, columnspan=4, padx=3, pady=2, sticky=tk.W) 
+        self.y_invert_check = ttk.Checkbutton(y_axis_frame, text="Invert Axis", variable=self.y_invert_var)
+        self.y_invert_check.grid(row=2, column=1, padx=5, pady=1, sticky=tk.W)
         
-        self.y_listbox_frame = ttk.Frame(y1_axis_frame, height=80)
-        self.y_listbox_scroll = ttk.Scrollbar(self.y_listbox_frame, orient=tk.VERTICAL)
-        self.y_listbox = tk.Listbox(self.y_listbox_frame, selectmode=tk.MULTIPLE, yscrollcommand=self.y_listbox_scroll.set, exportselection=False, height=4)
-        self.y_listbox_scroll.config(command=self.y_listbox.yview)
-        self.y_listbox_scroll.pack(side=tk.RIGHT, fill=tk.Y)
-        self.y_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        self.y_listbox_frame.grid(row=2, column=0, columnspan=4, padx=3, pady=2, sticky=tk.EW)
-        self.y_listbox_frame.pack_propagate(False) 
+        y_axis_frame.columnconfigure(1, weight=1)
+
+        # --- Z-Axis Frame ---
+        z_axis_frame = ttk.LabelFrame(axis_frames_container, text="Z-Axis (Value Axis)")
+        z_axis_frame.pack(fill=tk.X, padx=3, pady=2)
         
-        y1_axis_frame.columnconfigure(1, weight=1)
-
-        # --- Y-Axis (Right) Frame ---
-        y2_axis_frame = ttk.LabelFrame(y_axis_paned_window, text="Y-Axis (Right)")
-        y_axis_paned_window.add(y2_axis_frame, weight=1)
-
-        ttk.Label(y2_axis_frame, text="Label:").grid(row=0, column=0, padx=2, pady=1, sticky=tk.W)
-        self.ylabel2_entry = ttk.Entry(y2_axis_frame, textvariable=self.ylabel2_var, width=24)
-        self.ylabel2_entry.grid(row=0, column=1, padx=2, pady=1, sticky=tk.EW)
-
-        # (★ ADDED) Log scale checkbox
-        self.y2_log_scale_check = ttk.Checkbutton(y2_axis_frame, text="Log Scale", variable=self.y2_log_scale_var)
-        self.y2_log_scale_check.grid(row=0, column=2, padx=5, pady=1, sticky=tk.W) 
-
-        self.y2_invert_check = ttk.Checkbutton(y2_axis_frame, text="Invert Axis", variable=self.y2_invert_var)
-        self.y2_invert_check.grid(row=0, column=3, padx=5, pady=1, sticky=tk.W) # Place next to log scale
-
-        ttk.Label(y2_axis_frame, text="Data (Multi-select):").grid(row=1, column=0, columnspan=4, padx=3, pady=2, sticky=tk.W) 
-
-        self.y2_listbox_frame = ttk.Frame(y2_axis_frame, height=80)
-        self.y2_listbox_scroll = ttk.Scrollbar(self.y2_listbox_frame, orient=tk.VERTICAL)
-        self.y2_listbox = tk.Listbox(self.y2_listbox_frame, selectmode=tk.MULTIPLE, yscrollcommand=self.y2_listbox_scroll.set, exportselection=False, height=4)
-        self.y2_listbox_scroll.config(command=self.y2_listbox.yview)
-        self.y2_listbox_scroll.pack(side=tk.RIGHT, fill=tk.Y)
-        self.y2_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        self.y2_listbox_frame.grid(row=2, column=0, columnspan=4, padx=3, pady=2, sticky=tk.EW)
-        self.y2_listbox_frame.pack_propagate(False)
-
-        y2_axis_frame.columnconfigure(1, weight=1)
+        ttk.Label(z_axis_frame, text="Label (e.g., 'Temperature', 'Value'):").grid(row=0, column=0, columnspan=3, padx=2, pady=1, sticky=tk.W)
+        self.zlabel_entry = ttk.Entry(z_axis_frame, textvariable=self.zlabel_var, width=25)
+        self.zlabel_entry.grid(row=1, column=0, columnspan=3, padx=2, pady=1, sticky=tk.EW)
+        
+        ttk.Label(z_axis_frame, text="Data Series (Multi-select):").grid(row=2, column=0, columnspan=3, padx=2, pady=1, sticky=tk.W)
+        
+        self.z_listbox_frame = ttk.Frame(z_axis_frame, height=80)
+        self.z_listbox_scroll = ttk.Scrollbar(self.z_listbox_frame, orient=tk.VERTICAL)
+        self.z_listbox = tk.Listbox(self.z_listbox_frame, selectmode=tk.MULTIPLE, yscrollcommand=self.z_listbox_scroll.set, exportselection=False, height=4)
+        self.z_listbox_scroll.config(command=self.z_listbox.yview)
+        self.z_listbox_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        self.z_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self.z_listbox_frame.grid(row=3, column=0, columnspan=3, padx=3, pady=2, sticky=tk.EW)
+        self.z_listbox_frame.pack_propagate(False)
+        
+        self.z_log_scale_check = ttk.Checkbutton(z_axis_frame, text="Log Scale", variable=self.z_log_scale_var)
+        self.z_log_scale_check.grid(row=4, column=0, padx=2, pady=1, sticky=tk.W)
+        
+        self.z_invert_check = ttk.Checkbutton(z_axis_frame, text="Invert Axis", variable=self.z_invert_var)
+        self.z_invert_check.grid(row=4, column=1, padx=5, pady=1, sticky=tk.W)
+        
+        z_axis_frame.columnconfigure(1, weight=1)
 
         # --- Figure Size ---
         fig_size_frame = ttk.Frame(frame)
@@ -538,84 +524,142 @@ class GraphApp(BASE_CLASS):
         self.fig_height_spin.grid(row=0, column=3, padx=2, pady=1, sticky=tk.W)
 
     def create_style_settings_tab(self, frame):
-        # --- (★ Style Refactor) ---
+        # 3D Style Settings
         
-        common_frame = ttk.LabelFrame(frame, text="Common Style Settings")
-        common_frame.pack(fill=tk.X, padx=2, pady=2)
+        common_frame = ttk.LabelFrame(frame, text="Common Settings")
+        common_frame.pack(fill=tk.X, padx=5, pady=5)
 
         self.grid_check = ttk.Checkbutton(common_frame, text="Show Grid", variable=self.grid_var)
-        self.grid_check.grid(row=0, column=0, padx=2, pady=1, sticky=tk.W)
+        self.grid_check.grid(row=0, column=0, padx=5, pady=5, sticky=tk.W)
 
-        self.marker_check = ttk.Checkbutton(common_frame, text="Show Markers (Line/Scatter)", variable=self.marker_var)
-        self.marker_check.grid(row=0, column=1, padx=5, pady=1, sticky=tk.W)
+        self.marker_check = ttk.Checkbutton(common_frame, text="Show Markers (line3d only)", variable=self.marker_var)
+        self.marker_check.grid(row=0, column=1, padx=5, pady=5, sticky=tk.W)
         
-        ttk.Label(common_frame, text="(Note: Series-specific styles are always used)").grid(row=0, column=2, padx=5, pady=1, sticky=tk.W)
+        ttk.Separator(frame, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=10)
 
-        # font_settings_frame = ttk.LabelFrame(frame, text="Font Settings")
-        # font_settings_frame.pack(fill=tk.X, padx=5, pady=5)
-        # self.create_font_size_widgets(font_settings_frame) # Call helper
+        # Info label
+        info_frame = ttk.LabelFrame(frame, text="3D Style Information")
+        info_frame.pack(fill=tk.X, padx=5, pady=5)
         
-        # --- Separator ---
-        ttk.Separator(frame, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=(10, 5))
+        info_text = """Style settings apply to different plot types as follows:
+        
+• surface: Color, Alpha (transparency)
+• wireframe: Color, Line Width, Alpha
+• scatter3d: Color, Marker Style, Alpha
+• line3d: All settings (Color, Line Style, Line Width, Marker, Alpha)
+• contour3d: Alpha only (uses colormap)
 
+Select Z-axis series below to customize individual series styles."""
+        
+        ttk.Label(info_frame, text=info_text, justify=tk.LEFT).pack(padx=5, pady=5)
+        
+        ttk.Separator(frame, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=10)
+        
+        # --- Mesh Resolution Section ---
+        mesh_frame = ttk.LabelFrame(frame, text="Surface/Wireframe Quality")
+        mesh_frame.pack(fill=tk.X, padx=5, pady=5)
+        
+        ttk.Label(mesh_frame, text="Mesh Resolution:").grid(row=0, column=0, padx=5, pady=5, sticky=tk.W)
+        self.mesh_resolution_spin = ttk.Spinbox(mesh_frame, from_=10, to=200, increment=10, textvariable=self.mesh_resolution_var, width=10)
+        self.mesh_resolution_spin.grid(row=0, column=1, padx=5, pady=5, sticky=tk.W)
+        ttk.Label(mesh_frame, text="(Higher = smoother)").grid(row=0, column=2, padx=5, pady=5, sticky=tk.W)
+        
+        # --- Colormap Section ---
+        cmap_frame = ttk.LabelFrame(frame, text="Colormap (Surface/Contour)")
+        cmap_frame.pack(fill=tk.X, padx=5, pady=5)
+        
+        ttk.Label(cmap_frame, text="Color Gradient:").grid(row=0, column=0, padx=5, pady=5, sticky=tk.W)
+        
+        # Comprehensive list of matplotlib colormaps
+        colormaps = [
+            # Perceptually Uniform Sequential
+            'viridis', 'plasma', 'inferno', 'magma', 'cividis',
+            # Sequential
+            'Greys', 'Purples', 'Blues', 'Greens', 'Oranges', 'Reds',
+            'YlOrBr', 'YlOrRd', 'OrRd', 'PuRd', 'RdPu', 'BuPu',
+            'GnBu', 'PuBu', 'YlGnBu', 'PuBuGn', 'BuGn', 'YlGn',
+            # Sequential (2)
+            'binary', 'gist_yarg', 'gist_gray', 'gray', 'bone', 'pink',
+            'spring', 'summer', 'autumn', 'winter', 'cool', 'Wistia',
+            'hot', 'afmhot', 'gist_heat', 'copper',
+            # Diverging
+            'PiYG', 'PRGn', 'BrBG', 'PuOr', 'RdGy', 'RdBu',
+            'RdYlBu', 'RdYlGn', 'Spectral', 'coolwarm', 'bwr', 'seismic',
+            # Cyclic
+            'twilight', 'twilight_shifted', 'hsv',
+            # Qualitative
+            'Pastel1', 'Pastel2', 'Paired', 'Accent',
+            'Dark2', 'Set1', 'Set2', 'Set3',
+            'tab10', 'tab20', 'tab20b', 'tab20c',
+            # Miscellaneous
+            'flag', 'prism', 'ocean', 'gist_earth', 'terrain', 'gist_stern',
+            'gnuplot', 'gnuplot2', 'CMRmap', 'cubehelix', 'brg',
+            'gist_rainbow', 'rainbow', 'jet', 'turbo', 'nipy_spectral',
+            'gist_ncar'
+        ]
+        
+        self.colormap_combo = ttk.Combobox(cmap_frame, textvariable=self.colormap_var, 
+                                           values=colormaps, state='readonly', width=20)
+        self.colormap_combo.grid(row=0, column=1, padx=5, pady=5, sticky=tk.W)
+        ttk.Label(cmap_frame, text="(When Series Color = Auto)").grid(row=0, column=2, padx=5, pady=5, sticky=tk.W)
+        
+        ttk.Separator(frame, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=10)
 
-        # --- Top frame for Y1/Y2 selectors ---
+        # Selector frame
         selector_frame = ttk.Frame(frame)
-        selector_frame.pack(fill=tk.X, pady=2)
+        selector_frame.pack(fill=tk.X, padx=5, pady=5)
 
-
-        # ★ 1. Consolidate: Add a single, combined selector
-        ttk.Label(selector_frame, text="Select Series (Y1/Y2):").pack(side=tk.LEFT, padx=2, pady=1)
-        self.style_combo = ttk.Combobox(selector_frame, textvariable=self.combined_style_target_var, state='readonly', width=20)
-        self.style_combo.pack(side=tk.LEFT, padx=2, pady=1, fill=tk.X, expand=True)
-        # Bind selection event to the new consolidated callback
+        ttk.Label(selector_frame, text="Select Z Series to Edit:").pack(side=tk.LEFT, padx=5)
+        self.style_combo = ttk.Combobox(selector_frame, textvariable=self.combined_style_target_var, state='readonly', width=25)
+        self.style_combo.pack(side=tk.LEFT, padx=5, fill=tk.X, expand=True)
         self.style_combo.bind("<<ComboboxSelected>>", self.on_combined_series_select)
 
-        # --- Common "Style Editor" Frame ---
+        # Style Editor Frame
         editor_frame = ttk.LabelFrame(frame, text="Style Editor (for selected series)")
-        editor_frame.pack(fill=tk.X, padx=2, pady=2)
+        editor_frame.pack(fill=tk.X, padx=5, pady=5)
 
-        # Editor Row 1: Color
-        ttk.Label(editor_frame, text="Line/Bar Color:").grid(row=0, column=0, padx=2, pady=1, sticky=tk.W)
-        self.style_editor_color_btn = ttk.Button(editor_frame, text="Select", command=self.on_style_editor_color_pick, width=8)
-        self.style_editor_color_btn.grid(row=0, column=1, padx=1, pady=1) # Reduced padx
+        # Row 0: Color
+        ttk.Label(editor_frame, text="Color:").grid(row=0, column=0, padx=5, pady=5, sticky=tk.W)
+        self.style_editor_color_btn = ttk.Button(editor_frame, text="Choose Color", command=self.on_style_editor_color_pick, width=12)
+        self.style_editor_color_btn.grid(row=0, column=1, padx=5, pady=5)
         
-        # (★ ADDED) Auto button
         self.style_editor_color_auto_btn = ttk.Button(editor_frame, text="Auto", command=self.on_style_editor_color_auto, width=8)
-        self.style_editor_color_auto_btn.grid(row=0, column=2, padx=1, pady=1) # Add Auto button
+        self.style_editor_color_auto_btn.grid(row=0, column=2, padx=5, pady=5)
         
-        self.style_editor_color_label = ttk.Label(editor_frame, text="#000000", background="#000000", width=10, anchor=tk.CENTER)
-        self.style_editor_color_label.grid(row=0, column=3, padx=2, pady=1) # Shifted column
+        self.style_editor_color_label = ttk.Label(editor_frame, text="Auto", width=15, relief=tk.SUNKEN, anchor=tk.CENTER)
+        self.style_editor_color_label.grid(row=0, column=3, padx=5, pady=5)
 
-        # Editor Row 1: Line Style (Right side)
-        ttk.Label(editor_frame, text="Line Style:").grid(row=0, column=4, padx=5, pady=1, sticky=tk.W) # Shifted column
-        self.style_editor_linestyle_combo = ttk.Combobox(editor_frame, textvariable=self.current_style_linestyle_var, 
-                                            values=['-', '--', ':', '-.', 'None'], state='readonly', width=6)
-        self.style_editor_linestyle_combo.grid(row=0, column=5, padx=2, pady=1, sticky=tk.W) # Shifted column
-        self.style_editor_linestyle_combo.bind("<<ComboboxSelected>>", self.on_style_editor_change)
-
-        # Editor Row 2: Marker Style
-        ttk.Label(editor_frame, text="Marker Style:").grid(row=1, column=0, padx=2, pady=1, sticky=tk.W)
-        self.style_editor_marker_combo = ttk.Combobox(editor_frame, textvariable=self.current_style_marker_var, 
-                                              values=['o', '.', ',', 's', 'p', '*', '^', '<', '>', 'D', 'H', 'None'], state='readonly', width=6)
-        self.style_editor_marker_combo.grid(row=1, column=1, columnspan=3, padx=2, pady=1, sticky=tk.W) # Use columnspan 3
-        self.style_editor_marker_combo.bind("<<ComboboxSelected>>", self.on_style_editor_change)
-
-        # Editor Row 2: Line Width (Right side)
-        ttk.Label(editor_frame, text="Line Width:").grid(row=1, column=4, padx=5, pady=1, sticky=tk.W) # Shifted column
-        self.style_editor_linewidth_spin = ttk.Spinbox(editor_frame, from_=0.5, to=10.0, increment=0.5, textvariable=self.current_style_linewidth_var, width=6,
-                                                       command=self.on_style_editor_change) # command handles spinbox change
-        self.style_editor_linewidth_spin.grid(row=1, column=5, padx=2, pady=1, sticky=tk.W) # Shifted column
-        # Also bind Return key for manual entry
-        self.style_editor_linewidth_spin.bind("<Return>", self.on_style_editor_change)
-
-
-        # Editor Row 3: Alpha
-        ttk.Label(editor_frame, text="Alpha (Opacity):").grid(row=2, column=0, padx=2, pady=1, sticky=tk.W)
-        self.style_editor_alpha_spin = ttk.Spinbox(editor_frame, from_=0.0, to=1.0, increment=0.1, textvariable=self.current_style_alpha_var, width=6,
+        # Row 1: Alpha
+        ttk.Label(editor_frame, text="Alpha (Transparency):").grid(row=1, column=0, padx=5, pady=5, sticky=tk.W)
+        self.style_editor_alpha_spin = ttk.Spinbox(editor_frame, from_=0.0, to=1.0, increment=0.1, textvariable=self.current_style_alpha_var, width=10,
                                                    command=self.on_style_editor_change)
-        self.style_editor_alpha_spin.grid(row=2, column=1, columnspan=3, padx=2, pady=1, sticky=tk.W) # Use columnspan 3
+        self.style_editor_alpha_spin.grid(row=1, column=1, padx=5, pady=5, sticky=tk.W)
         self.style_editor_alpha_spin.bind("<Return>", self.on_style_editor_change)
+        ttk.Label(editor_frame, text="(0.0 = transparent, 1.0 = opaque)").grid(row=1, column=2, columnspan=2, padx=5, pady=5, sticky=tk.W)
+
+        # Row 2: Line Width
+        ttk.Label(editor_frame, text="Line Width:").grid(row=2, column=0, padx=5, pady=5, sticky=tk.W)
+        self.style_editor_linewidth_spin = ttk.Spinbox(editor_frame, from_=0.5, to=10.0, increment=0.5, textvariable=self.current_style_linewidth_var, width=10,
+                                                       command=self.on_style_editor_change)
+        self.style_editor_linewidth_spin.grid(row=2, column=1, padx=5, pady=5, sticky=tk.W)
+        self.style_editor_linewidth_spin.bind("<Return>", self.on_style_editor_change)
+        ttk.Label(editor_frame, text="(for wireframe and line3d)").grid(row=2, column=2, columnspan=2, padx=5, pady=5, sticky=tk.W)
+
+        # Row 3: Line Style
+        ttk.Label(editor_frame, text="Line Style:").grid(row=3, column=0, padx=5, pady=5, sticky=tk.W)
+        self.style_editor_linestyle_combo = ttk.Combobox(editor_frame, textvariable=self.current_style_linestyle_var, 
+                                            values=['-', '--', ':', '-.', 'None'], state='readonly', width=10)
+        self.style_editor_linestyle_combo.grid(row=3, column=1, padx=5, pady=5, sticky=tk.W)
+        self.style_editor_linestyle_combo.bind("<<ComboboxSelected>>", self.on_style_editor_change)
+        ttk.Label(editor_frame, text="(for line3d only)").grid(row=3, column=2, columnspan=2, padx=5, pady=5, sticky=tk.W)
+
+        # Row 4: Marker Style
+        ttk.Label(editor_frame, text="Marker Style:").grid(row=4, column=0, padx=5, pady=5, sticky=tk.W)
+        self.style_editor_marker_combo = ttk.Combobox(editor_frame, textvariable=self.current_style_marker_var, 
+                                              values=['o', '.', ',', 's', 'p', '*', '^', '<', '>', 'D', 'H', 'None'], state='readonly', width=10)
+        self.style_editor_marker_combo.grid(row=4, column=1, padx=5, pady=5, sticky=tk.W)
+        self.style_editor_marker_combo.bind("<<ComboboxSelected>>", self.on_style_editor_change)
+        ttk.Label(editor_frame, text="(for scatter3d and line3d)").grid(row=4, column=2, columnspan=2, padx=5, pady=5, sticky=tk.W)
 
 
     def create_font_size_tab(self, frame):
@@ -634,22 +678,18 @@ class GraphApp(BASE_CLASS):
         self.xlabel_fontsize_spin = ttk.Spinbox(frame, from_=6, to=48, increment=1, textvariable=self.xlabel_fontsize_var, width=6)
         self.xlabel_fontsize_spin.grid(row=2, column=1, padx=2, pady=1, sticky=tk.W)
 
-        ttk.Label(frame, text="Y-Left Label Size:").grid(row=3, column=0, padx=2, pady=1, sticky=tk.W)
+        ttk.Label(frame, text="Y-Label Size:").grid(row=3, column=0, padx=2, pady=1, sticky=tk.W)
         self.ylabel_fontsize_spin = ttk.Spinbox(frame, from_=6, to=48, increment=1, textvariable=self.ylabel_fontsize_var, width=6)
         self.ylabel_fontsize_spin.grid(row=3, column=1, padx=2, pady=1, sticky=tk.W)
 
-        ttk.Label(frame, text="Y-Right Label Size:").grid(row=4, column=0, padx=2, pady=1, sticky=tk.W)
-        self.ylabel2_fontsize_spin = ttk.Spinbox(frame, from_=6, to=48, increment=1, textvariable=self.ylabel2_fontsize_var, width=6)
-        self.ylabel2_fontsize_spin.grid(row=4, column=1, padx=2, pady=1, sticky=tk.W)
+        ttk.Label(frame, text="Z-Label Size:").grid(row=4, column=0, padx=2, pady=1, sticky=tk.W)
+        self.zlabel_fontsize_spin = ttk.Spinbox(frame, from_=6, to=48, increment=1, textvariable=self.zlabel_fontsize_var, width=6)
+        self.zlabel_fontsize_spin.grid(row=4, column=1, padx=2, pady=1, sticky=tk.W)
 
         # Font Size (Right Column)
-        ttk.Label(frame, text="Ticks (Left/X) Size:").grid(row=1, column=2, padx=5, pady=1, sticky=tk.W)
+        ttk.Label(frame, text="Tick Label Size:").grid(row=1, column=2, padx=5, pady=1, sticky=tk.W)
         self.tick_fontsize_spin = ttk.Spinbox(frame, from_=6, to=48, increment=1, textvariable=self.tick_fontsize_var, width=6)
         self.tick_fontsize_spin.grid(row=1, column=3, padx=2, pady=1, sticky=tk.W)
-        
-        ttk.Label(frame, text="Ticks (Right) Size:").grid(row=2, column=2, padx=5, pady=1, sticky=tk.W)
-        self.tick2_fontsize_spin = ttk.Spinbox(frame, from_=6, to=48, increment=1, textvariable=self.tick2_fontsize_var, width=6)
-        self.tick2_fontsize_spin.grid(row=2, column=3, padx=2, pady=1, sticky=tk.W)
 
         # 3. Layout: Figure Size is now in Basic Settings tab
         
@@ -684,12 +724,12 @@ class GraphApp(BASE_CLASS):
             variable=self.xaxis_plain_format_var)
         self.xaxis_plain_format_check.grid(row=4, column=0, columnspan=4, padx=5, pady=5, sticky=tk.W) 
 
-        ttk.Separator(frame, orient=tk.HORIZONTAL).grid(row=5, column=0, columnspan=5, sticky="ew", pady=10) # Shifted from 4 to 5
+        ttk.Separator(frame, orient=tk.HORIZONTAL).grid(row=5, column=0, columnspan=5, sticky="ew", pady=10)
 
-        # --- Y-Axis (Left) ---
-        ttk.Label(frame, text="Y-Axis (Left)", font=("-weight bold")).grid(row=6, column=0, sticky=tk.W, pady=5) # Shifted from 5 to 6
+        # --- Y-Axis ---
+        ttk.Label(frame, text="Y-Axis", font=("-weight bold")).grid(row=6, column=0, sticky=tk.W, pady=5)
         
-        ttk.Label(frame, text="Range (Min):").grid(row=7, column=0, padx=5, pady=5, sticky=tk.W) # Shifted from 6 to 7
+        ttk.Label(frame, text="Range (Min):").grid(row=7, column=0, padx=5, pady=5, sticky=tk.W)
         self.ylim_min_entry = ttk.Entry(frame, textvariable=self.ylim_min_var, width=10)
         self.ylim_min_entry.grid(row=7, column=1, padx=5, pady=5) # Shifted from 6 to 7
         ttk.Label(frame, text="Range (Max):").grid(row=7, column=2, padx=5, pady=5, sticky=tk.W) # Shifted from 6 to 7
@@ -713,41 +753,41 @@ class GraphApp(BASE_CLASS):
 
         self.yaxis_plain_format_check = ttk.Checkbutton(frame, 
             text="Disable Scientific Notation", 
-            variable=self.yaxis1_plain_format_var)
+            variable=self.yaxis_plain_format_var)
         self.yaxis_plain_format_check.grid(row=10, column=0, columnspan=4, padx=5, pady=5, sticky=tk.W) 
         
-        ttk.Separator(frame, orient=tk.HORIZONTAL).grid(row=11, column=0, columnspan=5, sticky="ew", pady=10) # Shifted from 9 to 11
+        ttk.Separator(frame, orient=tk.HORIZONTAL).grid(row=11, column=0, columnspan=5, sticky="ew", pady=10)
         
-        # --- Y-Axis (Right) ---
-        ttk.Label(frame, text="Y-Axis (Right)", font=("-weight bold")).grid(row=12, column=0, sticky=tk.W, pady=5) # Shifted from 10 to 12
+        # --- Z-Axis ---
+        ttk.Label(frame, text="Z-Axis", font=("-weight bold")).grid(row=12, column=0, sticky=tk.W, pady=5)
         
-        ttk.Label(frame, text="Range (Min):").grid(row=13, column=0, padx=5, pady=5, sticky=tk.W) # Shifted from 11 to 13
-        self.ylim2_min_entry = ttk.Entry(frame, textvariable=self.ylim2_min_var, width=10)
-        self.ylim2_min_entry.grid(row=13, column=1, padx=5, pady=5) # Shifted from 11 to 13
-        ttk.Label(frame, text="Range (Max):").grid(row=13, column=2, padx=5, pady=5, sticky=tk.W) # Shifted from 11 to 13
-        self.ylim2_max_entry = ttk.Entry(frame, textvariable=self.ylim2_max_var, width=10)
-        self.ylim2_max_entry.grid(row=13, column=3, padx=5, pady=5) # Shifted from 11 to 13
+        ttk.Label(frame, text="Range (Min):").grid(row=13, column=0, padx=5, pady=5, sticky=tk.W)
+        self.zlim_min_entry = ttk.Entry(frame, textvariable=self.zlim_min_var, width=10)
+        self.zlim_min_entry.grid(row=13, column=1, padx=5, pady=5)
+        ttk.Label(frame, text="Range (Max):").grid(row=13, column=2, padx=5, pady=5, sticky=tk.W)
+        self.zlim_max_entry = ttk.Entry(frame, textvariable=self.zlim_max_var, width=10)
+        self.zlim_max_entry.grid(row=13, column=3, padx=5, pady=5)
         
-        ttk.Label(frame, text="Major Tick Interval:").grid(row=14, column=0, padx=5, pady=5, sticky=tk.W) # New row 14
-        self.ytick2_major_interval_entry = ttk.Entry(frame, textvariable=self.ytick2_major_interval_var, width=10)
-        self.ytick2_major_interval_entry.grid(row=14, column=1, padx=5, pady=5)
-        ttk.Label(frame, text="(Linear scale only)").grid(row=14, column=2, padx=5, pady=5, sticky=tk.W) # Note
+        ttk.Label(frame, text="Major Tick Interval:").grid(row=14, column=0, padx=5, pady=5, sticky=tk.W)
+        self.ztick_major_interval_entry = ttk.Entry(frame, textvariable=self.ztick_major_interval_var, width=10)
+        self.ztick_major_interval_entry.grid(row=14, column=1, padx=5, pady=5)
+        ttk.Label(frame, text="(Linear scale only)").grid(row=14, column=2, padx=5, pady=5, sticky=tk.W)
 
         ttk.Label(frame, text="Tick Direction:").grid(row=15, column=0, padx=5, pady=5, sticky=tk.W) 
-        self.ytick2_direction_combo = ttk.Combobox(frame, textvariable=self.ytick2_direction_var, 
+        self.ztick_direction_combo = ttk.Combobox(frame, textvariable=self.ztick_direction_var, 
                                                   values=['out', 'in', 'inout'], state='readonly', width=8)
-        self.ytick2_direction_combo.grid(row=15, column=1, padx=5, pady=5, sticky=tk.W)
-        self.ytick2_show_check = ttk.Checkbutton(frame, text="Show Ticks", variable=self.ytick2_show_var)
-        self.ytick2_show_check.grid(row=15, column=2, padx=5, pady=5, sticky=tk.W) 
-        self.ytick2_label_show_check = ttk.Checkbutton(frame, text="Show Labels", variable=self.ytick2_label_show_var)
-        self.ytick2_label_show_check.grid(row=15, column=3, padx=5, pady=5, sticky=tk.W)
+        self.ztick_direction_combo.grid(row=15, column=1, padx=5, pady=5, sticky=tk.W)
+        self.ztick_show_check = ttk.Checkbutton(frame, text="Show Ticks", variable=self.ztick_show_var)
+        self.ztick_show_check.grid(row=15, column=2, padx=5, pady=5, sticky=tk.W) 
+        self.ztick_label_show_check = ttk.Checkbutton(frame, text="Show Labels", variable=self.ztick_label_show_var)
+        self.ztick_label_show_check.grid(row=15, column=3, padx=5, pady=5, sticky=tk.W)
         
 
-        self.yaxis2_plain_format_check = ttk.Checkbutton(frame, 
+        self.zaxis_plain_format_check = ttk.Checkbutton(frame, 
             text="Disable Scientific Notation", 
-            variable=self.yaxis2_plain_format_var)
+            variable=self.zaxis_plain_format_var)
 
-        self.yaxis2_plain_format_check.grid(row=16, column=0, columnspan=4, padx=5, pady=5, sticky=tk.W) 
+        self.zaxis_plain_format_check.grid(row=16, column=0, columnspan=4, padx=5, pady=5, sticky=tk.W) 
 
         frame.columnconfigure(4, weight=1)
 
@@ -796,146 +836,36 @@ class GraphApp(BASE_CLASS):
                                              state='readonly', width=28)
         self.legend_loc_combo.grid(row=2, column=1, padx=5, pady=5, sticky=tk.W)
         
-        ttk.Label(frame, text="(Legend labels use Y-axis column names automatically)").grid(row=1, column=0, columnspan=2, padx=5, pady=5, sticky=tk.W)
+        ttk.Label(frame, text="(Legend labels use Z-axis column names automatically)").grid(row=1, column=0, columnspan=2, padx=5, pady=5, sticky=tk.W)
 
     def create_advanced_tab(self, frame):
-        # (★ ADDED) Advanced Features Tab
-        
-        # --- Smoothing Section ---
-        smoothing_frame = ttk.LabelFrame(frame, text="Data Smoothing (Moving Average)")
-        smoothing_frame.pack(fill=tk.X, padx=5, pady=5)
-        
-        self.enable_smoothing_check = ttk.Checkbutton(smoothing_frame, text="Enable Smoothing", variable=self.enable_smoothing_var)
-        self.enable_smoothing_check.grid(row=0, column=0, padx=5, pady=5, sticky=tk.W)
-        
-        ttk.Label(smoothing_frame, text="Window Size:").grid(row=0, column=1, padx=5, pady=5, sticky=tk.W)
-        self.smoothing_window_spin = ttk.Spinbox(smoothing_frame, from_=2, to=50, increment=1, textvariable=self.smoothing_window_var, width=10)
-        self.smoothing_window_spin.grid(row=0, column=2, padx=5, pady=5, sticky=tk.W)
-        
-        ttk.Label(smoothing_frame, text="(Applies to Line plots only)").grid(row=1, column=0, columnspan=3, padx=5, pady=5, sticky=tk.W)
-        
-        ttk.Separator(frame, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=10)
-        
-        # --- Error Bar Section ---
-        errorbar_frame = ttk.LabelFrame(frame, text="Error Bars")
-        errorbar_frame.pack(fill=tk.X, padx=5, pady=5)
-        
-        self.enable_errorbar_check = ttk.Checkbutton(errorbar_frame, text="Enable Error Bars", variable=self.enable_errorbar_var)
-        self.enable_errorbar_check.grid(row=0, column=0, padx=5, pady=5, sticky=tk.W)
-        
-        ttk.Label(errorbar_frame, text="Error Column:").grid(row=1, column=0, padx=5, pady=5, sticky=tk.W)
-        self.errorbar_column_combo = ttk.Combobox(errorbar_frame, textvariable=self.errorbar_column_var, state='readonly', width=28)
-        self.errorbar_column_combo.grid(row=1, column=1, padx=5, pady=5, sticky=tk.W)
-        
-        ttk.Label(errorbar_frame, text="(Error values applied to first Y1 series)").grid(row=2, column=0, columnspan=2, padx=5, pady=5, sticky=tk.W)
-        
-        ttk.Separator(frame, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=10)
-        
-        # --- Annotation Section ---
-        annotation_frame = ttk.LabelFrame(frame, text="Data Point Annotations")
-        annotation_frame.pack(fill=tk.X, padx=5, pady=5)
-        
-        self.enable_annotation_check = ttk.Checkbutton(annotation_frame, text="Show Data Point Values", variable=self.enable_annotation_var)
-        self.enable_annotation_check.grid(row=0, column=0, padx=5, pady=5, sticky=tk.W)
-        
-        ttk.Label(annotation_frame, text="(Shows values on first Y1 series)").grid(row=1, column=0, padx=5, pady=5, sticky=tk.W)
-        
-        ttk.Separator(frame, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=10)
-        
-        # --- Data Filtering Section ---
-        filter_frame = ttk.LabelFrame(frame, text="Data Filtering")
-        filter_frame.pack(fill=tk.X, padx=5, pady=5)
-        
-        self.data_filter_check = ttk.Checkbutton(filter_frame, text="Enable Data Filter", variable=self.data_filter_enabled_var)
-        self.data_filter_check.grid(row=0, column=0, padx=5, pady=5, sticky=tk.W)
-        
-        ttk.Label(filter_frame, text="Filter Column:").grid(row=1, column=0, padx=5, pady=5, sticky=tk.W)
-        self.filter_column_combo = ttk.Combobox(filter_frame, textvariable=self.filter_column_var, state='readonly', width=20)
-        self.filter_column_combo.grid(row=1, column=1, padx=5, pady=5, sticky=tk.W)
-        
-        ttk.Label(filter_frame, text="Min Value:").grid(row=2, column=0, padx=5, pady=5, sticky=tk.W)
-        self.filter_min_entry = ttk.Entry(filter_frame, textvariable=self.filter_min_var, width=15)
-        self.filter_min_entry.grid(row=2, column=1, padx=5, pady=5, sticky=tk.W)
-        
-        ttk.Label(filter_frame, text="Max Value:").grid(row=2, column=2, padx=5, pady=5, sticky=tk.W)
-        self.filter_max_entry = ttk.Entry(filter_frame, textvariable=self.filter_max_var, width=15)
-        self.filter_max_entry.grid(row=2, column=3, padx=5, pady=5, sticky=tk.W)
-        
-        ttk.Label(filter_frame, text="(Filters data based on column value range)").grid(row=3, column=0, columnspan=4, padx=5, pady=5, sticky=tk.W)
-        
-        ttk.Separator(frame, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=10)
+        # Advanced 3D Settings Tab
         
         # --- Grid Style Section ---
         grid_style_frame = ttk.LabelFrame(frame, text="Grid Customization")
         grid_style_frame.pack(fill=tk.X, padx=5, pady=5)
         
-        ttk.Label(grid_style_frame, text="Grid Alpha:").grid(row=0, column=0, padx=5, pady=5, sticky=tk.W)
+        ttk.Label(grid_style_frame, text="Grid Alpha (Transparency):").grid(row=0, column=0, padx=5, pady=5, sticky=tk.W)
         self.grid_alpha_spin = ttk.Spinbox(grid_style_frame, from_=0.0, to=1.0, increment=0.1, textvariable=self.grid_alpha_var, width=10)
         self.grid_alpha_spin.grid(row=0, column=1, padx=5, pady=5, sticky=tk.W)
         
-        ttk.Label(grid_style_frame, text="Grid Style:").grid(row=0, column=2, padx=15, pady=5, sticky=tk.W)
-        self.grid_linestyle_combo = ttk.Combobox(grid_style_frame, textvariable=self.grid_linestyle_var, 
-                                                 values=['-', '--', '-.', ':'], state='readonly', width=10)
-        self.grid_linestyle_combo.grid(row=0, column=3, padx=5, pady=5, sticky=tk.W)
-        
-        ttk.Label(grid_style_frame, text="Grid Width:").grid(row=1, column=0, padx=5, pady=5, sticky=tk.W)
-        self.grid_linewidth_spin = ttk.Spinbox(grid_style_frame, from_=0.1, to=3.0, increment=0.1, textvariable=self.grid_linewidth_var, width=10)
-        self.grid_linewidth_spin.grid(row=1, column=1, padx=5, pady=5, sticky=tk.W)
-        
         ttk.Separator(frame, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=10)
         
-        # --- Label Rotation Section ---
-        rotation_frame = ttk.LabelFrame(frame, text="Label Rotation")
-        rotation_frame.pack(fill=tk.X, padx=5, pady=5)
+        # --- 3D View Angle Section ---
+        view_frame = ttk.LabelFrame(frame, text="3D View Angle")
+        view_frame.pack(fill=tk.X, padx=5, pady=5)
         
-        self.rotate_labels_check = ttk.Checkbutton(rotation_frame, text="Rotate X-Axis Labels", variable=self.rotate_labels_var)
-        self.rotate_labels_check.grid(row=0, column=0, padx=5, pady=5, sticky=tk.W)
+        ttk.Label(view_frame, text="Elevation (degrees):").grid(row=0, column=0, padx=5, pady=5, sticky=tk.W)
+        self.view_elev_spin = ttk.Spinbox(view_frame, from_=-90, to=90, increment=5, textvariable=self.view_elev_var, width=10)
+        self.view_elev_spin.grid(row=0, column=1, padx=5, pady=5, sticky=tk.W)
         
-        ttk.Label(rotation_frame, text="Rotation Angle:").grid(row=0, column=1, padx=15, pady=5, sticky=tk.W)
-        self.rotation_angle_spin = ttk.Spinbox(rotation_frame, from_=0, to=90, increment=15, textvariable=self.rotation_angle_var, width=10)
-        self.rotation_angle_spin.grid(row=0, column=2, padx=5, pady=5, sticky=tk.W)
+        ttk.Label(view_frame, text="Azimuth (degrees):").grid(row=0, column=2, padx=15, pady=5, sticky=tk.W)
+        self.view_azim_spin = ttk.Spinbox(view_frame, from_=-180, to=180, increment=5, textvariable=self.view_azim_var, width=10)
+        self.view_azim_spin.grid(row=0, column=3, padx=5, pady=5, sticky=tk.W)
         
-        ttk.Separator(frame, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=10)
-        
-        # --- Subplot Mode Section ---
-        subplot_frame = ttk.LabelFrame(frame, text="Multiple Plot Layout")
-        subplot_frame.pack(fill=tk.X, padx=5, pady=5)
-        
-        self.subplot_mode_check = ttk.Checkbutton(subplot_frame, text="Split Y1 and Y2 into Separate Subplots", variable=self.subplot_mode_var)
-        self.subplot_mode_check.grid(row=0, column=0, padx=5, pady=5, sticky=tk.W)
-        
-        ttk.Label(subplot_frame, text="(Creates vertically stacked plots for Y1 and Y2)").grid(row=1, column=0, padx=5, pady=5, sticky=tk.W)
+        ttk.Label(view_frame, text="(Adjust the 3D viewing angle)").grid(row=1, column=0, columnspan=4, padx=5, pady=5, sticky=tk.W)
 
 
-    def apply_data_filter(self):
-        """Apply data filtering based on column range"""
-        if self.df is None or self.df.empty:
-            return
-        
-        filter_col = self.filter_column_var.get()
-        if not filter_col or filter_col not in self.df.columns:
-            return
-        
-        try:
-            # Convert filter column to numeric
-            filter_data = pd.to_numeric(self.df[filter_col].astype(str).str.replace(r'[^\d.-]', '', regex=True), errors='coerce')
-            
-            # Create mask
-            mask = pd.Series([True] * len(self.df))
-            
-            if self.filter_min_var.get():
-                min_val = float(self.filter_min_var.get())
-                mask &= (filter_data >= min_val)
-            
-            if self.filter_max_var.get():
-                max_val = float(self.filter_max_var.get())
-                mask &= (filter_data <= max_val)
-            
-            # Apply filter
-            self.df = self.df[mask].reset_index(drop=True)
-            
-        except (ValueError, TypeError) as e:
-            print(f"Filter error: {e}")
     
     def export_filtered_data(self):
         """Export the current (filtered) data to CSV"""
@@ -979,12 +909,13 @@ class GraphApp(BASE_CLASS):
             self.canvas.draw()
             
             # Reset listboxes
-            self.y_listbox.delete(0, tk.END)
-            self.y2_listbox.delete(0, tk.END)
+            self.z_listbox.delete(0, tk.END)
             
             # Reset combos
             self.x_axis_combo['values'] = []
             self.x_axis_combo['state'] = 'disabled'
+            self.y_axis_combo['values'] = []
+            self.y_axis_combo['state'] = 'disabled'
             if hasattr(self, 'errorbar_column_combo'):
                 self.errorbar_column_combo['values'] = []
             if hasattr(self, 'filter_column_combo'):
@@ -994,14 +925,15 @@ class GraphApp(BASE_CLASS):
             
             # Reset all variables to defaults
             self.x_axis_var.set("")
+            self.y_axis_var.set("")
+            self.z_axis_var.set("")
             self.title_var.set("")
             self.xlabel_var.set("")
             self.ylabel_var.set("")
-            self.ylabel2_var.set("")
+            self.zlabel_var.set("")
             
-            # Clear style dictionaries
+            # Clear style dictionary
             self.y1_series_styles = {}
-            self.y2_series_styles = {}
             
             # Reset style editor
             self.combined_style_target_var.set("")
@@ -1017,15 +949,14 @@ class GraphApp(BASE_CLASS):
         """Reset all settings to default values (keep data)"""
         if messagebox.askyesno("Confirm Reset", "Reset all graph settings to default values?\n(Data will be kept)"):
             # Reset all setting variables to defaults
-            self.plot_type_var.set("line")
+            self.plot_type_var.set("surface")
             self.title_var.set("")
             self.xlabel_var.set("")
             self.ylabel_var.set("")
-            self.ylabel2_var.set("")
+            self.zlabel_var.set("")
             
-            # Clear style dictionaries
+            # Clear style dictionary
             self.y1_series_styles = {}
-            self.y2_series_styles = {}
             self.combined_style_target_var.set("")
             self.load_style_to_editor(None, True)
             
@@ -1038,9 +969,8 @@ class GraphApp(BASE_CLASS):
             self.title_fontsize_var.set(16.0)
             self.xlabel_fontsize_var.set(14.0)
             self.ylabel_fontsize_var.set(14.0)
-            self.ylabel2_fontsize_var.set(14.0)
+            self.zlabel_fontsize_var.set(14.0)
             self.tick_fontsize_var.set(14.0)
-            self.tick2_fontsize_var.set(14.0)
             self.fig_width_var.set(7.0)
             self.fig_height_var.set(6.0)
             
@@ -1049,8 +979,8 @@ class GraphApp(BASE_CLASS):
             self.xlim_max_var.set("")
             self.ylim_min_var.set("")
             self.ylim_max_var.set("")
-            self.ylim2_min_var.set("")
-            self.ylim2_max_var.set("")
+            self.zlim_min_var.set("")
+            self.zlim_max_var.set("")
             
             # Reset tick settings
             self.xtick_show_var.set(True)
@@ -1059,17 +989,17 @@ class GraphApp(BASE_CLASS):
             self.ytick_show_var.set(True)
             self.ytick_label_show_var.set(True)
             self.ytick_direction_var.set('out')
-            self.ytick2_show_var.set(True)
-            self.ytick2_label_show_var.set(True)
-            self.ytick2_direction_var.set('out')
+            self.ztick_show_var.set(True)
+            self.ztick_label_show_var.set(True)
+            self.ztick_direction_var.set('out')
             
             self.xaxis_plain_format_var.set(False)
             self.yaxis1_plain_format_var.set(False)
-            self.yaxis2_plain_format_var.set(False)
+            self.zaxis_plain_format_var.set(False)
             
             self.xtick_major_interval_var.set("")
             self.ytick_major_interval_var.set("")
-            self.ytick2_major_interval_var.set("")
+            self.ztick_major_interval_var.set("")
             
             # Reset spine settings
             self.spine_top_var.set(True)
@@ -1087,43 +1017,23 @@ class GraphApp(BASE_CLASS):
             
             # Reset log scale and invert
             self.x_log_scale_var.set(False)
-            self.y1_log_scale_var.set(False)
-            self.y2_log_scale_var.set(False)
+            self.y_log_scale_var.set(False)
+            self.z_log_scale_var.set(False)
             self.x_invert_var.set(False)
-            self.y1_invert_var.set(False)
-            self.y2_invert_var.set(False)
+            self.y_invert_var.set(False)
+            self.z_invert_var.set(False)
             
-            # Reset advanced features
-            if hasattr(self, 'enable_smoothing_var'):
-                self.enable_smoothing_var.set(False)
-            if hasattr(self, 'smoothing_window_var'):
-                self.smoothing_window_var.set(5)
-            if hasattr(self, 'enable_errorbar_var'):
-                self.enable_errorbar_var.set(False)
-            if hasattr(self, 'errorbar_column_var'):
-                self.errorbar_column_var.set("")
-            if hasattr(self, 'enable_annotation_var'):
-                self.enable_annotation_var.set(False)
-            if hasattr(self, 'data_filter_enabled_var'):
-                self.data_filter_enabled_var.set(False)
-            if hasattr(self, 'filter_min_var'):
-                self.filter_min_var.set("")
-            if hasattr(self, 'filter_max_var'):
-                self.filter_max_var.set("")
-            if hasattr(self, 'filter_column_var'):
-                self.filter_column_var.set("")
+            # Reset 3D-specific advanced features
+            if hasattr(self, 'view_elev_var'):
+                self.view_elev_var.set(30)
+            if hasattr(self, 'view_azim_var'):
+                self.view_azim_var.set(-60)
             if hasattr(self, 'grid_alpha_var'):
                 self.grid_alpha_var.set(0.3)
-            if hasattr(self, 'grid_linestyle_var'):
-                self.grid_linestyle_var.set('--')
-            if hasattr(self, 'grid_linewidth_var'):
-                self.grid_linewidth_var.set(0.5)
-            if hasattr(self, 'subplot_mode_var'):
-                self.subplot_mode_var.set(False)
-            if hasattr(self, 'rotate_labels_var'):
-                self.rotate_labels_var.set(False)
-            if hasattr(self, 'rotation_angle_var'):
-                self.rotation_angle_var.set(45)
+            if hasattr(self, 'mesh_resolution_var'):
+                self.mesh_resolution_var.set(50)
+            if hasattr(self, 'colormap_var'):
+                self.colormap_var.set('viridis')
             
             messagebox.showinfo("Reset Complete", "All settings have been reset to default values.")
     
@@ -1135,22 +1045,19 @@ class GraphApp(BASE_CLASS):
 
     # ★ 1. Consolidate: Add new combined callback
     def on_combined_series_select(self, event=None):
-        """ Loads the style for the selected combined series (Y1 or Y2) into the editor """
+        """ Loads the style for the selected Z series into the editor """
         selected_item = self.combined_style_target_var.get()
         if not selected_item:
             return
 
-        is_y1 = False
+        is_y1 = True  # In 3D mode, all Z series use y1_series_styles
         series_name = ""
 
-        if selected_item.startswith("(Y1) "):
+        if selected_item.startswith("(Z) "):
             is_y1 = True
-            series_name = selected_item[5:] # Get name after "(Y1) "
-        elif selected_item.startswith("(Y2) "):
-            is_y1 = False
-            series_name = selected_item[5:] # Get name after "(Y2) "
+            series_name = selected_item[4:]  # Get name after "(Z) "
         else:
-            return # Should not happen
+            return  # Should not happen
 
         if series_name:
             self.load_style_to_editor(series_name, is_y1=is_y1)
@@ -1167,7 +1074,8 @@ class GraphApp(BASE_CLASS):
             self.update_color_label(self.style_editor_color_label, "#000000")
             return
 
-        styles_dict = self.y1_series_styles if is_y1 else self.y2_series_styles
+        # In 3D mode, all Z series use y1_series_styles
+        styles_dict = self.y1_series_styles
         
         # Get the style for this series, or create a default if it's new
         series_style = self.get_or_create_default_style(series_name, styles_dict)
@@ -1213,12 +1121,9 @@ class GraphApp(BASE_CLASS):
         series_name = None
         styles_dict = None
 
-        if selected_item.startswith("(Y1) "):
-            series_name = selected_item[5:]
+        if selected_item.startswith("(Z) "):
+            series_name = selected_item[4:]
             styles_dict = self.y1_series_styles
-        elif selected_item.startswith("(Y2) "):
-            series_name = selected_item[5:]
-            styles_dict = self.y2_series_styles
         else:
             return # Should not happen
 
@@ -1323,12 +1228,14 @@ class GraphApp(BASE_CLASS):
         self.x_axis_combo['values'] = columns
         self.x_axis_combo['state'] = 'readonly'
         
-        # Y-Axis (Listbox)
-        self.y_listbox.delete(0, tk.END)
-        self.y2_listbox.delete(0, tk.END)
+        # Y-Axis
+        self.y_axis_combo['values'] = columns
+        self.y_axis_combo['state'] = 'readonly'
+        
+        # Z-Axis (Listbox)
+        self.z_listbox.delete(0, tk.END)
         for col in columns:
-            self.y_listbox.insert(tk.END, col)
-            self.y2_listbox.insert(tk.END, col)
+            self.z_listbox.insert(tk.END, col)
             
         self.plot_button['state'] = 'normal'
         self.export_button['state'] = 'normal'
@@ -1338,17 +1245,14 @@ class GraphApp(BASE_CLASS):
             self.x_axis_var.set(columns[0])
             self.xlabel_var.set(columns[0])
             if len(columns) > 1:
-                self.y_listbox.select_set(1) # Select 2nd column by default
+                self.y_axis_var.set(columns[1])
+                self.ylabel_var.set(columns[1])
+            # Don't set zlabel automatically - let user define what Z represents
+            # Z-axis represents values, not a coordinate dimension
+            if len(columns) > 2:
+                self.z_listbox.select_set(2)
             else:
-                self.y_listbox.select_set(0) # Select 1st column
-        
-        # (★ ADDED) Update error bar column combo
-        if hasattr(self, 'errorbar_column_combo'):
-            self.errorbar_column_combo['values'] = [''] + columns
-        
-        # (★ ADDED) Update filter column combo
-        if hasattr(self, 'filter_column_combo'):
-            self.filter_column_combo['values'] = columns
+                self.z_listbox.select_set(0)
         
         # Enable export data button
         if hasattr(self, 'export_data_button'):
@@ -1400,10 +1304,6 @@ class GraphApp(BASE_CLASS):
             # (Important) Fill NA back to '' for subsequent processing
             self.df = temp_df.fillna("")
             
-            # (★ ADDED) Apply data filtering if enabled
-            if self.data_filter_enabled_var.get() and self.filter_column_var.get():
-                self.apply_data_filter()
-
         except Exception as e:
             # 1. UI English: Messagebox
             messagebox.showwarning("Data Retrieval Error", f"Failed to update data from sheet:\n{e}\n{type(e)}")
@@ -1440,26 +1340,23 @@ class GraphApp(BASE_CLASS):
         settings = {
             "format": "Python Matplotlib Grapher App (HYGrapher) Graph Project",
             "version": "1.0",
-            "application": "HYGrapher",
+            "application": "HYGrapher 3D",
             "application_version": VERSION,
-            "dimension": "2D",
+            "dimension": "3D",
             "created": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "edited_data": data_dict,
             "original_file_path": self.data_file_path,
             "plot_type": self.plot_type_var.get(),
             "x_axis": self.x_axis_var.get(),
-            "y_axis_indices": list(self.y_listbox.curselection()),
-            "y2_axis_indices": list(self.y2_listbox.curselection()),
+            "y_axis": self.y_axis_var.get(),
+            "z_axis_indices": list(self.z_listbox.curselection()),
             "title": self.title_var.get(),
             "xlabel": self.xlabel_var.get(),
             "ylabel": self.ylabel_var.get(),
-            "ylabel2": self.ylabel2_var.get(),
+            "zlabel": self.zlabel_var.get(),
             
-            # --- (★ Style Refactor) ---
-            # Save the series style dictionaries
+            # Save the series style dictionary
             "y1_series_styles": self.y1_series_styles,
-            "y2_series_styles": self.y2_series_styles,
-            # --- (End Style Refactor) ---
 
             "grid": self.grid_var.get(),
             "marker": self.marker_var.get(),
@@ -1468,9 +1365,8 @@ class GraphApp(BASE_CLASS):
             "title_fontsize": self.title_fontsize_var.get(),
             "xlabel_fontsize": self.xlabel_fontsize_var.get(),
             "ylabel_fontsize": self.ylabel_fontsize_var.get(),
-            "ylabel2_fontsize": self.ylabel2_fontsize_var.get(),
+            "zlabel_fontsize": self.zlabel_fontsize_var.get(),
             "tick_fontsize": self.tick_fontsize_var.get(),
-            "tick2_fontsize": self.tick2_fontsize_var.get(),
             "fig_width": self.fig_width_var.get(),
             "fig_height": self.fig_height_var.get(),
             
@@ -1478,60 +1374,49 @@ class GraphApp(BASE_CLASS):
             "xlim_max": self.xlim_max_var.get(),
             "ylim_min": self.ylim_min_var.get(),
             "ylim_max": self.ylim_max_var.get(),
-            "ylim2_min": self.ylim2_min_var.get(),
-            "ylim2_max": self.ylim2_max_var.get(),
+            "zlim_min": self.zlim_min_var.get(),
+            "zlim_max": self.zlim_max_var.get(),
             "xtick_show": self.xtick_show_var.get(),
             "xtick_label_show": self.xtick_label_show_var.get(),
             "xtick_direction": self.xtick_direction_var.get(),
             "ytick_show": self.ytick_show_var.get(),
             "ytick_label_show": self.ytick_label_show_var.get(),
             "ytick_direction": self.ytick_direction_var.get(),
-            "ytick2_show": self.ytick2_show_var.get(),
-            "ytick2_label_show": self.ytick2_label_show_var.get(),
-            "ytick2_direction": self.ytick2_direction_var.get(),
+            "ztick_show": self.ztick_show_var.get(),
+            "ztick_label_show": self.ztick_label_show_var.get(),
+            "ztick_direction": self.ztick_direction_var.get(),
             
             "xaxis_plain_format": self.xaxis_plain_format_var.get(),
-            "yaxis1_plain_format": self.yaxis1_plain_format_var.get(),
-            "yaxis2_plain_format": self.yaxis2_plain_format_var.get(),
+            "yaxis_plain_format": self.yaxis_plain_format_var.get(),
+            "zaxis_plain_format": self.zaxis_plain_format_var.get(),
             
             "xtick_major_interval": self.xtick_major_interval_var.get(),
             "ytick_major_interval": self.ytick_major_interval_var.get(),
-            "ytick2_major_interval": self.ytick2_major_interval_var.get(),
+            "ztick_major_interval": self.ztick_major_interval_var.get(),
             
             "spine_top": self.spine_top_var.get(),
             "spine_bottom": self.spine_bottom_var.get(),
             "spine_left": self.spine_left_var.get(),
             "spine_right": self.spine_right_var.get(),
             "face_color": self.face_color_var.get(),
-            "fig_color": self.fig_color_var.get(), # (★ ADDED)
+            "fig_color": self.fig_color_var.get(),
             
             "legend_show": self.legend_show_var.get(),
             "legend_loc": self.legend_loc_var.get(),
             
             "x_log_scale": self.x_log_scale_var.get(),
-            "y1_log_scale": self.y1_log_scale_var.get(),
-            "y2_log_scale": self.y2_log_scale_var.get(),
+            "y_log_scale": self.y_log_scale_var.get(),
+            "z_log_scale": self.z_log_scale_var.get(),
 
             "x_invert": self.x_invert_var.get(),
-            "y1_invert": self.y1_invert_var.get(),
-            "y2_invert": self.y2_invert_var.get(),
+            "y_invert": self.y_invert_var.get(),
+            "z_invert": self.z_invert_var.get(),
             
-            "enable_smoothing": self.enable_smoothing_var.get(),
-            "smoothing_window": self.smoothing_window_var.get(),
-            "enable_errorbar": self.enable_errorbar_var.get(),
-            "errorbar_column": self.errorbar_column_var.get(),
-            "enable_annotation": self.enable_annotation_var.get(),
-            
-            "data_filter_enabled": self.data_filter_enabled_var.get(),
-            "filter_min": self.filter_min_var.get(),
-            "filter_max": self.filter_max_var.get(),
-            "filter_column": self.filter_column_var.get(),
             "grid_alpha": self.grid_alpha_var.get(),
-            "grid_linestyle": self.grid_linestyle_var.get(),
-            "grid_linewidth": self.grid_linewidth_var.get(),
-            "subplot_mode": self.subplot_mode_var.get(),
-            "rotate_labels": self.rotate_labels_var.get(),
-            "rotation_angle": self.rotation_angle_var.get(),
+            "view_elev": self.view_elev_var.get(),
+            "view_azim": self.view_azim_var.get(),
+            "mesh_resolution": self.mesh_resolution_var.get(),
+            "colormap": self.colormap_var.get(),
         }
         
         try:
@@ -1569,23 +1454,22 @@ class GraphApp(BASE_CLASS):
         settings = {
             "format": "Python Matplotlib Grapher App (HYGrapher) Graph Project",
             "version": "1.0",
-            "application": "HYGrapher",
+            "application": "HYGrapher 3D",
             "application_version": VERSION,
-            "dimension": "2D",
+            "dimension": "3D",
             "created": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "edited_data": data_dict,
             "original_file_path": self.data_file_path,
             "plot_type": self.plot_type_var.get(),
             "x_axis": self.x_axis_var.get(),
-            "y_axis_indices": list(self.y_listbox.curselection()),
-            "y2_axis_indices": list(self.y2_listbox.curselection()),
+            "y_axis": self.y_axis_var.get(),
+            "z_axis_indices": list(self.z_listbox.curselection()),
             "title": self.title_var.get(),
             "xlabel": self.xlabel_var.get(),
             "ylabel": self.ylabel_var.get(),
-            "ylabel2": self.ylabel2_var.get(),
+            "zlabel": self.zlabel_var.get(),
             
             "y1_series_styles": self.y1_series_styles,
-            "y2_series_styles": self.y2_series_styles,
 
             "grid": self.grid_var.get(),
             "marker": self.marker_var.get(),
@@ -1594,9 +1478,8 @@ class GraphApp(BASE_CLASS):
             "title_fontsize": self.title_fontsize_var.get(),
             "xlabel_fontsize": self.xlabel_fontsize_var.get(),
             "ylabel_fontsize": self.ylabel_fontsize_var.get(),
-            "ylabel2_fontsize": self.ylabel2_fontsize_var.get(),
+            "zlabel_fontsize": self.zlabel_fontsize_var.get(),
             "tick_fontsize": self.tick_fontsize_var.get(),
-            "tick2_fontsize": self.tick2_fontsize_var.get(),
             "fig_width": self.fig_width_var.get(),
             "fig_height": self.fig_height_var.get(),
             
@@ -1604,25 +1487,25 @@ class GraphApp(BASE_CLASS):
             "xlim_max": self.xlim_max_var.get(),
             "ylim_min": self.ylim_min_var.get(),
             "ylim_max": self.ylim_max_var.get(),
-            "ylim2_min": self.ylim2_min_var.get(),
-            "ylim2_max": self.ylim2_max_var.get(),
+            "zlim_min": self.zlim_min_var.get(),
+            "zlim_max": self.zlim_max_var.get(),
             "xtick_show": self.xtick_show_var.get(),
             "xtick_label_show": self.xtick_label_show_var.get(),
             "xtick_direction": self.xtick_direction_var.get(),
             "ytick_show": self.ytick_show_var.get(),
             "ytick_label_show": self.ytick_label_show_var.get(),
             "ytick_direction": self.ytick_direction_var.get(),
-            "ytick2_show": self.ytick2_show_var.get(),
-            "ytick2_label_show": self.ytick2_label_show_var.get(),
-            "ytick2_direction": self.ytick2_direction_var.get(),
+            "ztick_show": self.ztick_show_var.get(),
+            "ztick_label_show": self.ztick_label_show_var.get(),
+            "ztick_direction": self.ztick_direction_var.get(),
             
             "xaxis_plain_format": self.xaxis_plain_format_var.get(),
-            "yaxis1_plain_format": self.yaxis1_plain_format_var.get(),
-            "yaxis2_plain_format": self.yaxis2_plain_format_var.get(),
+            "yaxis_plain_format": self.yaxis_plain_format_var.get(),
+            "zaxis_plain_format": self.zaxis_plain_format_var.get(),
             
             "xtick_major_interval": self.xtick_major_interval_var.get(),
             "ytick_major_interval": self.ytick_major_interval_var.get(),
-            "ytick2_major_interval": self.ytick2_major_interval_var.get(),
+            "ztick_major_interval": self.ztick_major_interval_var.get(),
             
             "spine_top": self.spine_top_var.get(),
             "spine_bottom": self.spine_bottom_var.get(),
@@ -1635,29 +1518,18 @@ class GraphApp(BASE_CLASS):
             "legend_loc": self.legend_loc_var.get(),
             
             "x_log_scale": self.x_log_scale_var.get(),
-            "y1_log_scale": self.y1_log_scale_var.get(),
-            "y2_log_scale": self.y2_log_scale_var.get(),
+            "y_log_scale": self.y_log_scale_var.get(),
+            "z_log_scale": self.z_log_scale_var.get(),
 
             "x_invert": self.x_invert_var.get(),
-            "y1_invert": self.y1_invert_var.get(),
-            "y2_invert": self.y2_invert_var.get(),
+            "y_invert": self.y_invert_var.get(),
+            "z_invert": self.z_invert_var.get(),
             
-            "enable_smoothing": self.enable_smoothing_var.get(),
-            "smoothing_window": self.smoothing_window_var.get(),
-            "enable_errorbar": self.enable_errorbar_var.get(),
-            "errorbar_column": self.errorbar_column_var.get(),
-            "enable_annotation": self.enable_annotation_var.get(),
-            
-            "data_filter_enabled": self.data_filter_enabled_var.get(),
-            "filter_min": self.filter_min_var.get(),
-            "filter_max": self.filter_max_var.get(),
-            "filter_column": self.filter_column_var.get(),
             "grid_alpha": self.grid_alpha_var.get(),
-            "grid_linestyle": self.grid_linestyle_var.get(),
-            "grid_linewidth": self.grid_linewidth_var.get(),
-            "subplot_mode": self.subplot_mode_var.get(),
-            "rotate_labels": self.rotate_labels_var.get(),
-            "rotation_angle": self.rotation_angle_var.get(),
+            "view_elev": self.view_elev_var.get(),
+            "view_azim": self.view_azim_var.get(),
+            "mesh_resolution": self.mesh_resolution_var.get(),
+            "colormap": self.colormap_var.get(),
         }
         
         try:
@@ -1705,94 +1577,62 @@ class GraphApp(BASE_CLASS):
         except tk.TclError: # Handle invalid color code
             label.config(background="#FFFFFF", text="Invalid", anchor=tk.CENTER)
 
-    # --- Plotting Method (v5.0 Series Style) ---
+    # --- Plotting Method (3D Version) ---
     def plot_graph(self):
         
         # (1) Clear figure first
         try:
             self.fig.clear()
-            
-            # (★ ADDED) Create subplots based on mode
-            if self.subplot_mode_var.get():
-                # Create 2 vertically stacked subplots
-                self.ax = self.fig.add_subplot(211)  # Top plot
-                self.ax2 = self.fig.add_subplot(212)  # Bottom plot
-            else:
-                self.ax = self.fig.add_subplot(111) # Single plot
-                self.ax2 = None # Reset 2nd axis
-            
-            # (★ ADDED) Clear canvas to prevent ghost images
+            self.ax = self.fig.add_subplot(111, projection='3d')
+            self.ax2 = None
             self.canvas.draw()
         except Exception as e:
-            # 1. UI English: Messagebox
             messagebox.showerror("Internal Error", f"Failed to clear graph:\n{e}")
             return
 
         # 1. Get Data
         self.get_data_from_sheet()
         if self.df is None or self.df.empty:
-            # 1. UI English: Messagebox
             messagebox.showinfo("Info", "No data to plot.")
             self.canvas.draw()
             return
 
         # 2. Get All Settings
         x_col = self.x_axis_var.get()
+        y_col = self.y_axis_var.get()
         plot_type = self.plot_type_var.get()
         
         try:
-            y_cols_1 = [self.y_listbox.get(i) for i in self.y_listbox.curselection()]
-            y_cols_2 = [self.y2_listbox.get(i) for i in self.y2_listbox.curselection()]
+            z_cols = [self.z_listbox.get(i) for i in self.z_listbox.curselection()]
         except tk.TclError: 
-            y_cols_1 = []
-            y_cols_2 = []
-            
-        # --- (★ Style Refactor) Update Style Tab Comboboxes ---
-        # ★ 1. Consolidate: Update the single combined combobox
+            z_cols = []
         
-        # Build the combined list with prefixes
-        combined_list = []
-        for col in y_cols_1:
-            combined_list.append(f"(Y1) {col}")
-        for col in y_cols_2:
-            combined_list.append(f"(Y2) {col}")
-            
-        # Set the new values
+        # Update Style Comboboxes
+        combined_list = [f"(Z) {col}" for col in z_cols]
         self.style_combo['values'] = combined_list
-
-        # Clear the current selection if it's no longer valid
+        
         current_selection = self.combined_style_target_var.get()
         if current_selection not in combined_list:
             self.combined_style_target_var.set("")
-            self.load_style_to_editor(None, True) # Clear editor
-            
-        # ★ 1. Consolidate: Remove old combo updates
-        # self.y1_style_combo['values'] = y_cols_1
-        # self.y2_style_combo['values'] = y_cols_2
-        # if self.y1_style_target_var.get() not in y_cols_1:
-        #     self.y1_style_target_var.set("")
-        # if self.y2_style_target_var.get() not in y_cols_2:
-        #     self.y2_style_target_var.set("")
-        
-        # --- (End Style Refactor) ---
+            self.load_style_to_editor(None, True)
 
-
-        # --- Column Existence Check ---
+        # Column Existence Check
         if not x_col:
-            # 1. UI English: Messagebox
             messagebox.showerror("Error", "Please select an X-axis column.")
             self.canvas.draw()
             return
-        if not y_cols_1 and not y_cols_2:
-            # 1. UI English: Messagebox
-            messagebox.showerror("Error", "Please select data for Y-Axis (Left) or Y-Axis (Right).")
+        if not y_col:
+            messagebox.showerror("Error", "Please select a Y-axis column.")
+            self.canvas.draw()
+            return
+        if not z_cols:
+            messagebox.showerror("Error", "Please select data for Z-Axis.")
             self.canvas.draw()
             return
         
-        all_cols = [x_col] + y_cols_1 + y_cols_2
+        all_cols = [x_col, y_col] + z_cols
         for col in all_cols:
             if col not in self.df.columns:
-                # 1. UI English: Messagebox
                 messagebox.showerror("Plot Error", f"Selected column '{col}' does not exist in data.")
                 self.canvas.draw()
                 return
@@ -1800,616 +1640,246 @@ class GraphApp(BASE_CLASS):
         # 3. Prepare Graph (Size & Font)
         try:
             self.fig.set_size_inches(self.fig_width_var.get(), self.fig_height_var.get())
-            self.fig.set_facecolor(self.fig_color_var.get()) # (★ ADDED)
+            self.fig.set_facecolor(self.fig_color_var.get())
             matplotlib.rcParams['font.family'] = self.font_family_var.get()
-            
-            # Create 2nd Y-axis if needed
-            if y_cols_2:
-                self.ax2 = self.ax.twinx()
-                
         except Exception as e:
-            # 1. UI English: Messagebox
             messagebox.showerror("Settings Error", f"Failed to apply basic graph settings:\n{e}")
             return
 
-        # 4. Plot Graph
+        # 4. Plot 3D Graph
         try:
+            # Get and clean data
             x_data_raw = self.df[x_col]
+            y_data_raw = self.df[y_col]
             
-            # Try numeric conversion for X-axis (except for bar)
-            x_data_numeric = None
-            if plot_type != "bar":
-                x_data_cleaned = x_data_raw.astype(str).str.replace(r'[^\d.-]', '', regex=True)
-                x_data_numeric = pd.to_numeric(x_data_cleaned, errors='coerce')
+            x_data_cleaned = x_data_raw.astype(str).str.replace(r'[^\d.-]', '', regex=True)
+            x_data_numeric = pd.to_numeric(x_data_cleaned, errors='coerce')
+            
+            y_data_cleaned = y_data_raw.astype(str).str.replace(r'[^\d.-]', '', regex=True)
+            y_data_numeric = pd.to_numeric(y_data_cleaned, errors='coerce')
 
-            # --- Internal Plotting Function (★ Style Refactor) ---
-            def plot_series(ax, y_col, x_data_raw, is_twin_ax, series_index=0, total_series=1):
+            # Plot each Z column
+            for z_idx, z_col in enumerate(z_cols):
+                # Get style
+                series_style = self.get_or_create_default_style(z_col, self.y1_series_styles)
                 
-                # Get the style dictionary for this series
-                styles_dict = self.y1_series_styles if not is_twin_ax else self.y2_series_styles
-                # Get or create the specific style entry for this column
-                series_style = self.get_or_create_default_style(y_col, styles_dict)
-
-                # Prepare Y-data (clean and convert to numeric)
-                y_data_cleaned = self.df[y_col].astype(str).str.replace(r'[^\d.-]', '', regex=True)
-                y_data_numeric = pd.to_numeric(y_data_cleaned, errors='coerce')
-
-                # Get style properties, providing defaults
-                # IMPORTANT: Use .get(key, default)
+                # Clean Z data
+                z_data_cleaned = self.df[z_col].astype(str).str.replace(r'[^\d.-]', '', regex=True)
+                z_data_numeric = pd.to_numeric(z_data_cleaned, errors='coerce')
+                
+                # Create valid data frame
+                valid_data = pd.DataFrame({
+                    'x': x_data_numeric,
+                    'y': y_data_numeric, 
+                    'z': z_data_numeric
+                }).dropna()
+                
+                if valid_data.empty:
+                    continue
+                
+                # Get style properties
                 color = series_style.get('color', None)
-                if color == 'None' or color is None: # Allow 'None' string or Python None
-                    color = None # Let matplotlib auto-assign
-                    
+                if color == 'None' or color is None:
+                    color = None
                 linestyle = series_style.get('linestyle', '-')
-                if linestyle == 'None': linestyle = 'None' # String 'None' is valid for no line
-
                 linewidth = series_style.get('linewidth', 1.5)
                 alpha = series_style.get('alpha', 1.0)
+                marker = series_style.get('marker', 'o')
                 
-                # Marker style depends on the global "Show Markers" checkbox
-                markerstyle = series_style.get('marker', 'o')
-                if not self.marker_var.get() or markerstyle == 'None':
-                    markerstyle = 'None' # 'None' string is valid for no marker
-
-                if plot_type == "bar":
-                    x_data = x_data_raw.astype(str) # Bar uses X as string
-                    valid_mask = ~y_data_numeric.isnull()
-                    plot_x = x_data[valid_mask]
-                    plot_y = y_data_numeric[valid_mask]
-                    
-                    if plot_y.empty:
-                        return
-                    
-                    kwargs = {'alpha': alpha, 'label': y_col}
-                    
+                if plot_type == "surface" or plot_type == "wireframe":
+                    # Create grid for surface/wireframe
+                    try:
+                        # Get mesh resolution
+                        mesh_res = self.mesh_resolution_var.get()
+                        
+                        # Get data range
+                        x_min, x_max = valid_data['x'].min(), valid_data['x'].max()
+                        y_min, y_max = valid_data['y'].min(), valid_data['y'].max()
+                        
+                        # Create uniform grid with specified resolution
+                        x_grid = np.linspace(x_min, x_max, mesh_res)
+                        y_grid = np.linspace(y_min, y_max, mesh_res)
+                        X, Y = np.meshgrid(x_grid, y_grid)
+                        
+                        # Interpolate Z values onto the grid
+                        try:
+                            from scipy.interpolate import griddata
+                            points = valid_data[['x', 'y']].values
+                            values = valid_data['z'].values
+                            Z = griddata(points, values, (X, Y), method='linear')
+                            
+                            # Fill remaining NaN with nearest neighbor
+                            if np.isnan(Z).any():
+                                Z_nearest = griddata(points, values, (X, Y), method='nearest')
+                                Z = np.where(np.isnan(Z), Z_nearest, Z)
+                        except ImportError:
+                            messagebox.showwarning("Missing Library", 
+                                "scipy is required for surface/wireframe plots. Install with: pip install scipy")
+                            continue
+                        
+                        if plot_type == "surface":
+                            if color:
+                                self.ax.plot_surface(X, Y, Z, alpha=alpha, label=z_col, 
+                                                   color=color, edgecolor='none')
+                            else:
+                                cmap = self.colormap_var.get()
+                                self.ax.plot_surface(X, Y, Z, alpha=alpha, label=z_col,
+                                                   cmap=cmap, edgecolor='none')
+                        else:  # wireframe
+                            if color:
+                                self.ax.plot_wireframe(X, Y, Z, alpha=alpha, label=z_col,
+                                                      color=color, linewidth=linewidth)
+                            else:
+                                # Wireframe doesn't support cmap well, use default color
+                                self.ax.plot_wireframe(X, Y, Z, alpha=alpha, label=z_col,
+                                                      linewidth=linewidth)
+                    except Exception as e:
+                        messagebox.showwarning("Plot Warning", 
+                            f"Could not create {plot_type} for {z_col}. Using scatter instead.\n{e}")
+                        # Fallback to scatter
+                        self.ax.scatter(valid_data['x'], valid_data['y'], valid_data['z'],
+                                      c=color, marker=marker, alpha=alpha, label=z_col)
+                
+                elif plot_type == "scatter3d":
+                    self.ax.scatter(valid_data['x'], valid_data['y'], valid_data['z'],
+                                  c=color, marker=marker, alpha=alpha, label=z_col, s=50)
+                
+                elif plot_type == "line3d":
                     if color:
-                        kwargs['color'] = color
-                        
-                    ax.bar(plot_x, plot_y, **kwargs)
-
-                else: # line / scatter
-                    valid_data = pd.DataFrame({'x': x_data_numeric, 'y': y_data_numeric}).dropna()
-                    
-                    if valid_data.empty:
-                        return
-
-                    plot_x = valid_data['x']
-                    plot_y = valid_data['y']
-                    
-                    # (★ ADDED) Apply smoothing if enabled (line plots only)
-                    if plot_type == "line" and self.enable_smoothing_var.get() and len(plot_y) >= self.smoothing_window_var.get():
-                        plot_y_smooth = plot_y.rolling(window=self.smoothing_window_var.get(), center=True).mean()
-                        plot_y = plot_y_smooth.fillna(plot_y)  # Fill NaN with original values
-                    
-                    kwargs = {
-                        'marker': markerstyle,
-                        'alpha': alpha,
-                        'label': y_col
-                    }
-                    
-                    if color:
-                         kwargs['color'] = color
-
-                    # (★ ADDED) Error bars for first Y1 series
-                    errorbar_vals = None
-                    if (self.enable_errorbar_var.get() and not is_twin_ax and series_index == 0 
-                        and self.errorbar_column_var.get() and self.errorbar_column_var.get() in self.df.columns):
-                        error_col = self.errorbar_column_var.get()
-                        error_data_cleaned = self.df[error_col].astype(str).str.replace(r'[^\d.-]', '', regex=True)
-                        error_data_numeric = pd.to_numeric(error_data_cleaned, errors='coerce')
-                        # Align error data with valid data
-                        error_aligned = error_data_numeric.reindex(valid_data.index)
-                        errorbar_vals = error_aligned.values
-
-                    if plot_type == "line":
-                        kwargs.update({
-                            'linestyle': linestyle,
-                            'linewidth': linewidth,
-                        })
-                        if errorbar_vals is not None:
-                            kwargs['yerr'] = errorbar_vals
-                            kwargs['capsize'] = 3
-                            ax.errorbar(plot_x, plot_y, **kwargs)
-                        else:
-                            ax.plot(plot_x, plot_y, **kwargs)
-                    elif plot_type == "scatter":
-                         kwargs['marker'] = markerstyle if markerstyle != 'None' else 'o'
-                         if errorbar_vals is not None:
-                            kwargs['yerr'] = errorbar_vals
-                            kwargs['capsize'] = 3
-                            ax.errorbar(plot_x, plot_y, fmt=kwargs['marker'], **{k: v for k, v in kwargs.items() if k not in ['marker']})
-                         else:
-                            ax.scatter(plot_x, plot_y, **kwargs)
-                    elif plot_type == "step":
-                        kwargs.update({
-                            'linestyle': linestyle,
-                            'linewidth': linewidth,
-                        })
-                        ax.step(plot_x, plot_y, where='mid', **kwargs)
-                    elif plot_type == "stem":
-                        # Stem plots use different parameters
-                        stem_kwargs = {'label': y_col}
-                        if color:
-                            stem_kwargs['linefmt'] = color
-                            stem_kwargs['markerfmt'] = color + 'o'
-                        markerline, stemlines, baseline = ax.stem(plot_x, plot_y, **stem_kwargs)
-                        markerline.set_alpha(alpha)
-                        stemlines.set_alpha(alpha)
-                    elif plot_type == "area":
-                        kwargs.update({
-                            'linestyle': linestyle,
-                            'linewidth': linewidth,
-                        })
-                        ax.fill_between(plot_x, 0, plot_y, **kwargs)
-                    
-                    # (★ ADDED) Annotations for first Y1 series
-                    if self.enable_annotation_var.get() and not is_twin_ax and series_index == 0:
-                        for i, (x, y) in enumerate(zip(plot_x, plot_y)):
-                            if i % max(1, len(plot_x) // 10) == 0:  # Annotate every 10% of points
-                                ax.annotate(f'{y:.2f}', (x, y), textcoords="offset points", 
-                                           xytext=(0,5), ha='center', fontsize=8)
-
-            # --- Execute Plotting ---
-            
-            # (★ Style Refactor) Remove all the old logic about y1_color_to_use etc.
-            # Just loop and plot.
-            
-            # Special plot types that need different handling
-            if plot_type == "pie":
-                # Pie chart uses first Y column only
-                if y_cols_1:
-                    y_col = y_cols_1[0]
-                    y_data_cleaned = self.df[y_col].astype(str).str.replace(r'[^\d.-]', '', regex=True)
-                    y_data_numeric = pd.to_numeric(y_data_cleaned, errors='coerce')
-                    valid_data = pd.DataFrame({'x': x_data_raw, 'y': y_data_numeric}).dropna()
-                    if not valid_data.empty:
-                        labels = valid_data['x'].astype(str)
-                        values = valid_data['y']
-                        self.ax.pie(values, labels=labels, autopct='%1.1f%%', startangle=90)
-                        self.ax.axis('equal')
-                        if self.title_var.get():
-                            self.ax.set_title(self.title_var.get(), fontsize=self.title_fontsize_var.get(), 
-                                             fontfamily=self.font_family_var.get())
-                        
-                        self.fig.tight_layout()
-                        self.canvas.draw()
-                        fig_width_px = self.fig.get_figwidth() * self.fig.dpi
-                        fig_height_px = self.fig.get_figheight() * self.fig.dpi
-                        canvas_widget = self.canvas.get_tk_widget()
-                        canvas_widget.config(width=int(fig_width_px), height=int(fig_height_px))
-                        self.graph_frame.update_idletasks()
-                        self.on_graph_frame_configure(None)
-                        self.scrollable_canvas.update_idletasks()
-                        return  # Exit early for pie chart
+                        self.ax.plot(valid_data['x'], valid_data['y'], valid_data['z'],
+                                   color=color, linestyle=linestyle, linewidth=linewidth,
+                                   marker=marker if self.marker_var.get() else 'None',
+                                   alpha=alpha, label=z_col)
                     else:
-                        messagebox.showwarning("No Valid Data", "Pie chart requires valid numeric data.")
-                        return
-                else:
-                    messagebox.showwarning("No Data", "Pie chart requires at least one Y column.")
-                    return
-            elif plot_type == "box":
-                # Box plot for all Y columns
-                if y_cols_1:
-                    box_data = []
-                    box_labels = []
-                    for y_col in y_cols_1:
-                        y_data_cleaned = self.df[y_col].astype(str).str.replace(r'[^\d.-]', '', regex=True)
-                        y_data_numeric = pd.to_numeric(y_data_cleaned, errors='coerce').dropna()
-                        if len(y_data_numeric) > 0:
-                            box_data.append(y_data_numeric)
-                            box_labels.append(y_col)
-                    if box_data:
-                        self.ax.boxplot(box_data, labels=box_labels)
-                        if self.title_var.get():
-                            self.ax.set_title(self.title_var.get(), fontsize=self.title_fontsize_var.get(), 
-                                             fontfamily=self.font_family_var.get())
-                        if self.grid_var.get():
-                            self.ax.grid(True, alpha=self.grid_alpha_var.get(), axis='y')
+                        self.ax.plot(valid_data['x'], valid_data['y'], valid_data['z'],
+                                   linestyle=linestyle, linewidth=linewidth,
+                                   marker=marker if self.marker_var.get() else 'None',
+                                   alpha=alpha, label=z_col)
+                
+                elif plot_type == "contour3d":
+                    try:
+                        # Get mesh resolution
+                        mesh_res = self.mesh_resolution_var.get()
                         
-                        self.fig.tight_layout()
-                        self.canvas.draw()
-                        fig_width_px = self.fig.get_figwidth() * self.fig.dpi
-                        fig_height_px = self.fig.get_figheight() * self.fig.dpi
-                        canvas_widget = self.canvas.get_tk_widget()
-                        canvas_widget.config(width=int(fig_width_px), height=int(fig_height_px))
-                        self.graph_frame.update_idletasks()
-                        self.on_graph_frame_configure(None)
-                        self.scrollable_canvas.update_idletasks()
-                        return  # Exit early for box plot
-                    else:
-                        messagebox.showwarning("No Valid Data", "Box plot requires valid numeric data in at least one Y column.")
-                        return
-                else:
-                    messagebox.showwarning("No Data", "Box plot requires at least one Y column.")
-                    return
-            elif plot_type == "violin":
-                # Violin plot for all Y columns
-                if y_cols_1:
-                    violin_data = []
-                    violin_labels = []
-                    for y_col in y_cols_1:
-                        y_data_cleaned = self.df[y_col].astype(str).str.replace(r'[^\d.-]', '', regex=True)
-                        y_data_numeric = pd.to_numeric(y_data_cleaned, errors='coerce').dropna()
-                        if len(y_data_numeric) > 0:
-                            violin_data.append(y_data_numeric)
-                            violin_labels.append(y_col)
-                    if violin_data:
-                        parts = self.ax.violinplot(violin_data, showmeans=True, showmedians=True)
-                        self.ax.set_xticks(range(1, len(violin_labels) + 1))
-                        self.ax.set_xticklabels(violin_labels)
-                        if self.title_var.get():
-                            self.ax.set_title(self.title_var.get(), fontsize=self.title_fontsize_var.get(), 
-                                             fontfamily=self.font_family_var.get())
-                        if self.grid_var.get():
-                            self.ax.grid(True, alpha=self.grid_alpha_var.get(), axis='y')
+                        # Get data range
+                        x_min, x_max = valid_data['x'].min(), valid_data['x'].max()
+                        y_min, y_max = valid_data['y'].min(), valid_data['y'].max()
                         
-                        self.fig.tight_layout()
-                        self.canvas.draw()
-                        fig_width_px = self.fig.get_figwidth() * self.fig.dpi
-                        fig_height_px = self.fig.get_figheight() * self.fig.dpi
-                        canvas_widget = self.canvas.get_tk_widget()
-                        canvas_widget.config(width=int(fig_width_px), height=int(fig_height_px))
-                        self.graph_frame.update_idletasks()
-                        self.on_graph_frame_configure(None)
-                        self.scrollable_canvas.update_idletasks()
-                        return  # Exit early for violin plot
-                    else:
-                        messagebox.showwarning("No Valid Data", "Violin plot requires valid numeric data in at least one Y column.")
-                        return
-                else:
-                    messagebox.showwarning("No Data", "Violin plot requires at least one Y column.")
-                    return
-            elif plot_type == "heatmap":
-                # Heatmap needs 2D data - use all Y columns as rows
-                if y_cols_1:
-                    heatmap_data = []
-                    for y_col in y_cols_1:
-                        y_data_cleaned = self.df[y_col].astype(str).str.replace(r'[^\d.-]', '', regex=True)
-                        y_data_numeric = pd.to_numeric(y_data_cleaned, errors='coerce')
-                        # Replace NaN with 0 for display
-                        y_data_numeric = y_data_numeric.fillna(0)
-                        heatmap_data.append(y_data_numeric.values)
-                    
-                    heatmap_array = np.array(heatmap_data)
-                    im = self.ax.imshow(heatmap_array, aspect='auto', cmap='viridis', interpolation='nearest')
-                    self.ax.set_yticks(range(len(y_cols_1)))
-                    self.ax.set_yticklabels(y_cols_1)
-                    self.ax.set_xlabel(x_col, fontsize=self.xlabel_fontsize_var.get(), 
-                                      fontfamily=self.font_family_var.get())
-                    self.ax.set_ylabel('Data Series', fontsize=self.ylabel_fontsize_var.get(), 
-                                      fontfamily=self.font_family_var.get())
-                    if self.title_var.get():
-                        self.ax.set_title(self.title_var.get(), fontsize=self.title_fontsize_var.get(), 
-                                         fontfamily=self.font_family_var.get())
-                    cbar = self.fig.colorbar(im, ax=self.ax)
-                    cbar.set_label('Value', fontsize=self.ylabel_fontsize_var.get(), 
-                                  fontfamily=self.font_family_var.get())
-                    
-                    self.fig.tight_layout()
-                    self.canvas.draw()
-                    fig_width_px = self.fig.get_figwidth() * self.fig.dpi
-                    fig_height_px = self.fig.get_figheight() * self.fig.dpi
-                    canvas_widget = self.canvas.get_tk_widget()
-                    canvas_widget.config(width=int(fig_width_px), height=int(fig_height_px))
-                    self.graph_frame.update_idletasks()
-                    self.on_graph_frame_configure(None)
-                    self.scrollable_canvas.update_idletasks()
-                    return  # Exit early for heatmap
-                else:
-                    messagebox.showwarning("No Data", "Heatmap requires at least one Y column.")
-                    return
-            elif plot_type == "contour":
-                # Contour needs X, Y coordinates and Z values
-                # Requires at least 2 Y columns: first as Y-coordinate, second as Z-value
-                if len(y_cols_1) >= 2:
-                    y_col = y_cols_1[0]  # Y coordinate
-                    z_col = y_cols_1[1]  # Z value
-                    
-                    x_data_cleaned = x_data_raw.astype(str).str.replace(r'[^\d.-]', '', regex=True)
-                    x_data_numeric = pd.to_numeric(x_data_cleaned, errors='coerce')
-                    
-                    y_data_cleaned = self.df[y_col].astype(str).str.replace(r'[^\d.-]', '', regex=True)
-                    y_data_numeric = pd.to_numeric(y_data_cleaned, errors='coerce')
-                    
-                    z_data_cleaned = self.df[z_col].astype(str).str.replace(r'[^\d.-]', '', regex=True)
-                    z_data_numeric = pd.to_numeric(z_data_cleaned, errors='coerce')
-                    
-                    valid_data = pd.DataFrame({'x': x_data_numeric, 'y': y_data_numeric, 'z': z_data_numeric}).dropna()
-                    
-                    if len(valid_data) > 10:
-                        # Check if data has sufficient variation
-                        if (valid_data['x'].nunique() < 2 or valid_data['y'].nunique() < 2 or 
-                            valid_data['z'].nunique() < 2):
-                            messagebox.showwarning("Insufficient Variation", 
-                                "Contour plot requires variation in X, Y, and Z values.\n"
-                                "All values cannot be the same.")
-                        else:
-                            try:
-                                # Create grid for contour
-                                xi = np.linspace(valid_data['x'].min(), valid_data['x'].max(), 50)
-                                yi = np.linspace(valid_data['y'].min(), valid_data['y'].max(), 50)
-                                Xi, Yi = np.meshgrid(xi, yi)
-                                Zi = griddata((valid_data['x'].values, valid_data['y'].values), 
-                                            valid_data['z'].values, (Xi, Yi), method='linear')
-                                
-                                # Remove NaN for contour plotting
-                                if np.all(np.isnan(Zi)):
-                                    messagebox.showwarning("Interpolation Failed", 
-                                        "Cannot create contour plot. Data points may be too sparse or collinear.")
-                                else:
-                                    # Use nearest neighbor fill for NaN values
-                                    mask = np.isnan(Zi)
-                                    if np.any(mask):
-                                        Zi_nearest = griddata((valid_data['x'].values, valid_data['y'].values), 
-                                                             valid_data['z'].values, (Xi, Yi), method='nearest')
-                                        Zi = np.where(mask, Zi_nearest, Zi)
-                                    
-                                    contour = self.ax.contourf(Xi, Yi, Zi, levels=15, cmap='viridis')
-                                    cbar = self.fig.colorbar(contour, ax=self.ax)
-                                    cbar.set_label(z_col, fontsize=self.ylabel_fontsize_var.get(), 
-                                                  fontfamily=self.font_family_var.get())
-                                    self.ax.set_xlabel(x_col, fontsize=self.xlabel_fontsize_var.get(), 
-                                                      fontfamily=self.font_family_var.get())
-                                    self.ax.set_ylabel(y_col, fontsize=self.ylabel_fontsize_var.get(), 
-                                                      fontfamily=self.font_family_var.get())
-                                    if self.title_var.get():
-                                        self.ax.set_title(self.title_var.get(), fontsize=self.title_fontsize_var.get(), 
-                                                         fontfamily=self.font_family_var.get())
-                                    if self.grid_var.get():
-                                        self.ax.grid(True, alpha=self.grid_alpha_var.get())
-                                    
-                                    # Apply contour-specific settings and exit early
-                                    self.fig.tight_layout()
-                                    self.canvas.draw()
-                                    
-                                    # Get the figure size in pixels
-                                    fig_width_px = self.fig.get_figwidth() * self.fig.dpi
-                                    fig_height_px = self.fig.get_figheight() * self.fig.dpi
-                                    
-                                    # Update canvas widget size to match figure
-                                    canvas_widget = self.canvas.get_tk_widget()
-                                    canvas_widget.config(width=int(fig_width_px), height=int(fig_height_px))
-                                    
-                                    # Force update to ensure proper sizing
-                                    self.graph_frame.update_idletasks()
-                                    self.on_graph_frame_configure(None)
-                                    
-                                    # Force redraw to clear any artifacts
-                                    self.scrollable_canvas.update_idletasks()
-                                    return  # Exit early for contour plot
-                            except Exception as e:
-                                messagebox.showerror("Contour Error", 
-                                    f"Failed to create contour plot:\n{str(e)}\n\n"
-                                    "Tip: Ensure data points are well-distributed in 2D space.")
-                                return
-                    else:
-                        messagebox.showwarning("Insufficient Data", "Contour plot requires at least 10 data points.")
-                else:
-                    messagebox.showwarning("Insufficient Columns", "Contour plot requires at least 2 Y columns (Y-coord, Z-value).")
-            elif plot_type == "polar":
-                # Polar plot - recreate axis as polar
-                if y_cols_1:
-                    self.fig.clear()
-                    self.ax = self.fig.add_subplot(111, projection='polar')
-                    self.ax2 = None
-                    
-                    # Get numeric X data
-                    x_data_cleaned = x_data_raw.astype(str).str.replace(r'[^\d.-]', '', regex=True)
-                    x_data_numeric = pd.to_numeric(x_data_cleaned, errors='coerce')
-                    
-                    plot_count = 0
-                    for y_col in y_cols_1:
-                        y_data_cleaned = self.df[y_col].astype(str).str.replace(r'[^\d.-]', '', regex=True)
-                        y_data_numeric = pd.to_numeric(y_data_cleaned, errors='coerce')
-                        valid_data = pd.DataFrame({'x': x_data_numeric, 'y': y_data_numeric}).dropna()
-                        if not valid_data.empty:
-                            # Convert X to radians (assume X is in degrees, 0-360)
-                            theta = np.radians(valid_data['x'].values)
-                            r = valid_data['y'].values
-                            self.ax.plot(theta, r, label=y_col, marker='o', markersize=4)
-                            plot_count += 1
-                    
-                    if plot_count == 0:
-                        messagebox.showwarning("No Valid Data", "Polar plot requires valid numeric data.")
-                else:
-                    messagebox.showwarning("No Data", "Polar plot requires at least one Y column.")
-                
-                # Apply polar-specific settings
-                if self.title_var.get():
-                    self.ax.set_title(self.title_var.get(), fontsize=self.title_fontsize_var.get(), 
-                                     fontfamily=self.font_family_var.get(), pad=20)
-                if self.legend_show_var.get():
-                    legend_font_props = {'family': self.font_family_var.get(), 'size': self.tick_fontsize_var.get()}
-                    self.ax.legend(loc=self.legend_loc_var.get(), prop=legend_font_props)
-                if self.grid_var.get():
-                    self.ax.grid(True, alpha=self.grid_alpha_var.get())
-                
-                # Skip normal axis settings for polar plot
-                self.fig.tight_layout()
-                self.canvas.draw()
-                
-                # Get the figure size in pixels
-                fig_width_px = self.fig.get_figwidth() * self.fig.dpi
-                fig_height_px = self.fig.get_figheight() * self.fig.dpi
-                
-                # Update canvas widget size to match figure
-                canvas_widget = self.canvas.get_tk_widget()
-                canvas_widget.config(width=int(fig_width_px), height=int(fig_height_px))
-                
-                # Force update to ensure proper sizing
-                self.graph_frame.update_idletasks()
-                self.on_graph_frame_configure(None)
-                
-                # Force redraw to clear any artifacts
-                self.scrollable_canvas.update_idletasks()
-                return  # Exit early for polar plot
-            else:
-                # Standard plot types (line, scatter, bar, step, stem, area)
-                # 1st Y-Axis
-                for i, y_col in enumerate(y_cols_1):
-                    plot_series(self.ax, y_col, x_data_raw, is_twin_ax=False, series_index=i, total_series=len(y_cols_1))
-
-                # 2nd Y-Axis
-                if self.ax2:
-                    for i, y_col in enumerate(y_cols_2):
-                        plot_series(self.ax2, y_col, x_data_raw, is_twin_ax=True, series_index=i, total_series=len(y_cols_2))
+                        # Create uniform grid
+                        x_grid = np.linspace(x_min, x_max, mesh_res)
+                        y_grid = np.linspace(y_min, y_max, mesh_res)
+                        X, Y = np.meshgrid(x_grid, y_grid)
+                        
+                        # Interpolate Z values
+                        try:
+                            from scipy.interpolate import griddata
+                            points = valid_data[['x', 'y']].values
+                            values = valid_data['z'].values
+                            Z = griddata(points, values, (X, Y), method='linear')
+                            
+                            # Fill NaN with nearest neighbor
+                            if np.isnan(Z).any():
+                                Z_nearest = griddata(points, values, (X, Y), method='nearest')
+                                Z = np.where(np.isnan(Z), Z_nearest, Z)
+                        except ImportError:
+                            messagebox.showwarning("Missing Library", 
+                                "scipy is required for contour3d plots. Install with: pip install scipy")
+                            continue
+                        
+                        # Number of contour levels (proportional to resolution)
+                        num_levels = max(10, mesh_res // 5)
+                        cmap = self.colormap_var.get()
+                        self.ax.contour3D(X, Y, Z, num_levels, cmap=cmap, alpha=alpha)
+                    except Exception as e:
+                        messagebox.showwarning("Plot Warning",
+                            f"Could not create contour3d for {z_col}.\n{e}")
             
             
             # 5. Apply All Settings
             
-            # (★ ADDED) Log Scale Settings
+            # Log Scale Settings (3D axes)
             try:
                 self.ax.set_xscale('log' if self.x_log_scale_var.get() else 'linear')
-            except ValueError:
-                self.x_log_scale_var.set(False) # Uncheck if log fails
-                self.ax.set_xscale('linear') # Fallback if log scale fails (e.g., zero/negative data)
+            except (ValueError, NotImplementedError):
+                self.x_log_scale_var.set(False)
+                self.ax.set_xscale('linear')
             try:
-                self.ax.set_yscale('log' if self.y1_log_scale_var.get() else 'linear')
-            except ValueError:
-                 self.y1_log_scale_var.set(False) # Uncheck if log fails
-                 self.ax.set_yscale('linear')
+                self.ax.set_yscale('log' if self.y_log_scale_var.get() else 'linear')
+            except (ValueError, NotImplementedError):
+                self.y_log_scale_var.set(False)
+                self.ax.set_yscale('linear')
+            try:
+                self.ax.set_zscale('log' if self.z_log_scale_var.get() else 'linear')
+            except (ValueError, NotImplementedError):
+                self.z_log_scale_var.set(False)
+                self.ax.set_zscale('linear')
 
             # Labels and Title
             font_family = self.font_family_var.get()
-            self.ax.set_xlabel(self.xlabel_var.get() if self.xlabel_var.get() else x_col, fontsize=self.xlabel_fontsize_var.get(), fontfamily=font_family)
-            self.ax.set_ylabel(self.ylabel_var.get() if self.ylabel_var.get() else ", ".join(y_cols_1), fontsize=self.ylabel_fontsize_var.get(), fontfamily=font_family)
+            self.ax.set_xlabel(self.xlabel_var.get() if self.xlabel_var.get() else x_col, 
+                             fontsize=self.xlabel_fontsize_var.get(), fontfamily=font_family)
+            self.ax.set_ylabel(self.ylabel_var.get() if self.ylabel_var.get() else y_col, 
+                             fontsize=self.ylabel_fontsize_var.get(), fontfamily=font_family)
+            
+            # Z-axis label: Use custom label if provided, otherwise leave as "Z" or appropriate value axis label
+            # Don't use column names as default since Z represents values, not a coordinate
+            z_label = self.zlabel_var.get() if self.zlabel_var.get() else "Value"
+            self.ax.set_zlabel(z_label, fontsize=self.zlabel_fontsize_var.get(), fontfamily=font_family)
+            
             self.ax.set_title(self.title_var.get(), fontsize=self.title_fontsize_var.get(), fontfamily=font_family)
             
-            # Grid with custom style
+            # Grid
             if self.grid_var.get():
-                self.ax.grid(True, alpha=self.grid_alpha_var.get(), 
-                           linestyle=self.grid_linestyle_var.get(), 
-                           linewidth=self.grid_linewidth_var.get())
+                self.ax.grid(True, alpha=self.grid_alpha_var.get())
             else:
                 self.ax.grid(False)
             
-            # Axis limits (X, Y1)
+            # Axis limits
             self.set_axis_limits(self.ax, 'x', self.xlim_min_var.get(), self.xlim_max_var.get())
             self.set_axis_limits(self.ax, 'y', self.ylim_min_var.get(), self.ylim_max_var.get())
+            self.set_axis_limits(self.ax, 'z', self.zlim_min_var.get(), self.zlim_max_var.get())
 
             if self.x_invert_var.get():
                 self.ax.invert_xaxis()
-            if self.y1_invert_var.get():
+            if self.y_invert_var.get():
                 self.ax.invert_yaxis()
+            if self.z_invert_var.get():
+                self.ax.invert_zaxis()
 
-            # Tick settings (X, Y1)
-            self.ax.tick_params(axis='x', which='both', 
-                                direction=self.xtick_direction_var.get(), 
-                                bottom=self.xtick_show_var.get(),
-                                labelbottom=self.xtick_label_show_var.get(),
-                                labelsize=self.tick_fontsize_var.get())
-            self.ax.tick_params(axis='y', which='both', 
-                                direction=self.ytick_direction_var.get(), 
-                                left=self.ytick_show_var.get(), 
-                                labelleft=self.ytick_label_show_var.get(),
-                                labelsize=self.tick_fontsize_var.get())
+            # Tick settings
+            self.ax.tick_params(axis='x', labelsize=self.tick_fontsize_var.get())
+            self.ax.tick_params(axis='y', labelsize=self.tick_fontsize_var.get())
+            self.ax.tick_params(axis='z', labelsize=self.tick_fontsize_var.get())
             
-            font_family = self.font_family_var.get()
-            for label in self.ax.get_xticklabels() + self.ax.get_yticklabels():
+            # Set font family for tick labels
+            for label in self.ax.get_xticklabels() + self.ax.get_yticklabels() + self.ax.get_zticklabels():
                 label.set_fontfamily(font_family)
             
-            if self.rotate_labels_var.get():
-                self.ax.tick_params(axis='x', rotation=self.rotation_angle_var.get())
-                for label in self.ax.get_xticklabels():
-                    label.set_ha('right')
+            # Background pane colors
+            self.ax.xaxis.pane.fill = self.spine_top_var.get()
+            self.ax.yaxis.pane.fill = self.spine_left_var.get()
+            self.ax.zaxis.pane.fill = self.spine_right_var.get()
             
-            if self.xaxis_plain_format_var.get():
-                self.ax.ticklabel_format(style='plain', axis='x', useOffset=False)
-            if self.yaxis1_plain_format_var.get():
-                self.ax.ticklabel_format(style='plain', axis='y', useOffset=False)
-
-            # (★ ADDED) Apply Major Ticker Intervals (if linear scale)
-            self.apply_major_ticker(self.ax.xaxis, self.xtick_major_interval_var.get(), self.x_log_scale_var.get())
-            self.apply_major_ticker(self.ax.yaxis, self.ytick_major_interval_var.get(), self.y1_log_scale_var.get())
-                                
-            # Spines and Background Color (Axes)
-            self.ax.set_facecolor(self.face_color_var.get())
-            self.ax.spines['top'].set_visible(self.spine_top_var.get())
-            self.ax.spines['bottom'].set_visible(self.spine_bottom_var.get())
-            self.ax.spines['left'].set_visible(self.spine_left_var.get())
-            
-            # 2nd Y-Axis Settings
-            if self.ax2:
-                # (★ ADDED) Log Scale Setting
+            if self.spine_top_var.get() or self.spine_left_var.get() or self.spine_right_var.get():
                 try:
-                    self.ax2.set_yscale('log' if self.y2_log_scale_var.get() else 'linear')
-                except ValueError:
-                    self.y2_log_scale_var.set(False) # Uncheck if log fails
-                    self.ax2.set_yscale('linear')
-                
-                if self.subplot_mode_var.get():
-                    # In subplot mode, ax2 is a separate subplot
-                    self.ax2.set_xlabel(self.xlabel_var.get() if self.xlabel_var.get() else x_col, fontsize=self.xlabel_fontsize_var.get(), fontfamily=font_family)
-                    self.ax2.set_title(self.ylabel2_var.get() if self.ylabel2_var.get() else ", ".join(y_cols_2), fontsize=self.title_fontsize_var.get(), fontfamily=font_family)
-                    if self.grid_var.get():
-                        self.ax2.grid(True, alpha=self.grid_alpha_var.get(), 
-                                    linestyle=self.grid_linestyle_var.get(), 
-                                    linewidth=self.grid_linewidth_var.get())
-                    if self.rotate_labels_var.get():
-                        self.ax2.tick_params(axis='x', rotation=self.rotation_angle_var.get())
-                        for label in self.ax2.get_xticklabels():
-                            label.set_ha('right')
-                else:
-                    self.ax2.set_ylabel(self.ylabel2_var.get() if self.ylabel2_var.get() else ", ".join(y_cols_2), fontsize=self.ylabel2_fontsize_var.get(), fontfamily=font_family)
-                
-                self.set_axis_limits(self.ax2, 'y', self.ylim2_min_var.get(), self.ylim2_max_var.get())
-                
-                if self.y2_invert_var.get():
-                    self.ax2.invert_yaxis()
-                
-                self.ax2.tick_params(axis='y', which='both',
-                                     direction=self.ytick2_direction_var.get(),
-                                     right=self.ytick2_show_var.get(),
-                                     labelright=self.ytick2_label_show_var.get(),
-                                     labelsize=self.tick2_fontsize_var.get())
-                
-                for label in self.ax2.get_yticklabels():
-                    label.set_fontfamily(font_family)
-                
-                if self.yaxis2_plain_format_var.get():
-                    self.ax2.ticklabel_format(style='plain', axis='y', useOffset=False)
-                
-                self.apply_major_ticker(self.ax2.yaxis, self.ytick2_major_interval_var.get(), self.y2_log_scale_var.get())
-                
-                # Right spine visibility controlled by ax2
-                if not self.subplot_mode_var.get():
-                    # Twin axis mode
-                    self.ax.spines['right'].set_visible(False)
-                    self.ax2.spines['top'].set_visible(self.spine_top_var.get())
-                    self.ax2.spines['bottom'].set_visible(self.spine_bottom_var.get())
-                    self.ax2.spines['left'].set_visible(False)
-                    self.ax2.spines['right'].set_visible(self.spine_right_var.get())
-                else:
-                    # Subplot mode - both axes are independent
-                    self.ax2.spines['top'].set_visible(self.spine_top_var.get())
-                    self.ax2.spines['bottom'].set_visible(self.spine_bottom_var.get())
-                    self.ax2.spines['left'].set_visible(self.spine_left_var.get())
-                    self.ax2.spines['right'].set_visible(self.spine_right_var.get())
-                    self.ax2.set_facecolor(self.face_color_var.get())
-            else:
-                # No 2nd Y-axis
-                self.ax.spines['right'].set_visible(self.spine_right_var.get())
+                    # Parse face color
+                    face_rgb = matplotlib.colors.to_rgb(self.face_color_var.get())
+                    self.ax.xaxis.pane.set_facecolor(face_rgb + (0.3,))
+                    self.ax.yaxis.pane.set_facecolor(face_rgb + (0.3,))
+                    self.ax.zaxis.pane.set_facecolor(face_rgb + (0.3,))
+                except:
+                    pass
             
-            # Legend (Combined or Separate)
+            # Legend
             if self.legend_show_var.get():
                 legend_font_props = {'family': font_family, 'size': self.tick_fontsize_var.get()}
-                if self.subplot_mode_var.get() and self.ax2:
-                    # Separate legends for subplots
-                    h1, l1 = self.ax.get_legend_handles_labels()
-                    if h1:
-                        self.ax.legend(handles=h1, labels=l1, loc=self.legend_loc_var.get(), prop=legend_font_props)
-                    h2, l2 = self.ax2.get_legend_handles_labels()
-                    if h2:
-                        self.ax2.legend(handles=h2, labels=l2, loc=self.legend_loc_var.get(), prop=legend_font_props)
-                else:
-                    # Combined legend
-                    h1, l1 = self.ax.get_legend_handles_labels()
-                    h2, l2 = [], []
-                    if self.ax2 and not self.subplot_mode_var.get():
-                        h2, l2 = self.ax2.get_legend_handles_labels()
-                    self.ax.legend(handles=h1+h2, labels=l1+l2, 
-                                   loc=self.legend_loc_var.get(), 
-                                   prop=legend_font_props)
+                handles, labels = self.ax.get_legend_handles_labels()
+                if handles:
+                    self.ax.legend(handles=handles, labels=labels, 
+                                 loc=self.legend_loc_var.get(), prop=legend_font_props)
+            
+            # Set 3D view angle
+            self.ax.view_init(elev=self.view_elev_var.get(), azim=self.view_azim_var.get())
             
             self.fig.tight_layout()
 
@@ -2447,6 +1917,8 @@ class GraphApp(BASE_CLASS):
                 ax.set_xlim(min_v, max_v)
             elif axis_name == 'y':
                 ax.set_ylim(min_v, max_v)
+            elif axis_name == 'z':
+                ax.set_zlim(min_v, max_v)
         except ValueError:
             pass # Ignore if conversion fails
 
@@ -2571,20 +2043,20 @@ class GraphApp(BASE_CLASS):
             return
 
         # Check dimension and relaunch with appropriate app if needed
-        file_dimension = settings.get('dimension', '2D')
-        if file_dimension == '3D':
-            response = messagebox.askyesno("3D Project Detected", 
-                "This project was created in 3D mode.\nDo you want to open it in 3D mode?")
+        file_dimension = settings.get('dimension', '3D')
+        if file_dimension == '2D':
+            response = messagebox.askyesno("2D Project Detected", 
+                "This project was created in 2D mode.\nDo you want to open it in 2D mode?")
             if response:
                 import subprocess
                 script_dir = os.path.dirname(os.path.abspath(__file__))
-                main_3d_path = os.path.join(script_dir, "main_3d.py")
-                if os.path.exists(main_3d_path):
-                    subprocess.Popen([sys.executable, main_3d_path, file_path])
+                main_2d_path = os.path.join(script_dir, "main.py")
+                if os.path.exists(main_2d_path):
+                    subprocess.Popen([sys.executable, main_2d_path, file_path])
                     self.quit()
                     return
                 else:
-                    messagebox.showerror("File Not Found", "3D mode file not found.")
+                    messagebox.showerror("File Not Found", "2D mode file not found.")
                     return
 
         # Load Data - always use embedded data if available
@@ -2622,20 +2094,16 @@ class GraphApp(BASE_CLASS):
         # Apply all settings
         self.set_variable_from_dict(self.plot_type_var, settings, 'plot_type')
         self.set_variable_from_dict(self.x_axis_var, settings, 'x_axis')
+        self.set_variable_from_dict(self.y_axis_var, settings, 'y_axis')
         self.set_variable_from_dict(self.title_var, settings, 'title')
         self.set_variable_from_dict(self.xlabel_var, settings, 'xlabel')
         self.set_variable_from_dict(self.ylabel_var, settings, 'ylabel')
-        self.set_variable_from_dict(self.ylabel2_var, settings, 'ylabel2')
+        self.set_variable_from_dict(self.zlabel_var, settings, 'zlabel')
         
         if 'y1_series_styles' in settings:
             self.y1_series_styles = settings['y1_series_styles']
         else:
             self.y1_series_styles = {}
-            
-        if 'y2_series_styles' in settings:
-            self.y2_series_styles = settings['y2_series_styles']
-        else:
-            self.y2_series_styles = {}
 
         self.set_variable_from_dict(self.grid_var, settings, 'grid')
         self.set_variable_from_dict(self.marker_var, settings, 'marker')
@@ -2644,9 +2112,8 @@ class GraphApp(BASE_CLASS):
         self.set_variable_from_dict(self.title_fontsize_var, settings, 'title_fontsize')
         self.set_variable_from_dict(self.xlabel_fontsize_var, settings, 'xlabel_fontsize')
         self.set_variable_from_dict(self.ylabel_fontsize_var, settings, 'ylabel_fontsize')
-        self.set_variable_from_dict(self.ylabel2_fontsize_var, settings, 'ylabel2_fontsize')
+        self.set_variable_from_dict(self.zlabel_fontsize_var, settings, 'zlabel_fontsize', fallback_key='ylabel2_fontsize')
         self.set_variable_from_dict(self.tick_fontsize_var, settings, 'tick_fontsize')
-        self.set_variable_from_dict(self.tick2_fontsize_var, settings, 'tick2_fontsize')
         self.set_variable_from_dict(self.fig_width_var, settings, 'fig_width')
         self.set_variable_from_dict(self.fig_height_var, settings, 'fig_height')
         
@@ -2654,25 +2121,25 @@ class GraphApp(BASE_CLASS):
         self.set_variable_from_dict(self.xlim_max_var, settings, 'xlim_max')
         self.set_variable_from_dict(self.ylim_min_var, settings, 'ylim_min')
         self.set_variable_from_dict(self.ylim_max_var, settings, 'ylim_max')
-        self.set_variable_from_dict(self.ylim2_min_var, settings, 'ylim2_min')
-        self.set_variable_from_dict(self.ylim2_max_var, settings, 'ylim2_max')
+        self.set_variable_from_dict(self.zlim_min_var, settings, 'zlim_min', fallback_key='ylim2_min')
+        self.set_variable_from_dict(self.zlim_max_var, settings, 'zlim_max', fallback_key='ylim2_max')
         self.set_variable_from_dict(self.xtick_show_var, settings, 'xtick_show')
         self.set_variable_from_dict(self.xtick_label_show_var, settings, 'xtick_label_show')
         self.set_variable_from_dict(self.xtick_direction_var, settings, 'xtick_direction')
         self.set_variable_from_dict(self.ytick_show_var, settings, 'ytick_show')
         self.set_variable_from_dict(self.ytick_label_show_var, settings, 'ytick_label_show')
         self.set_variable_from_dict(self.ytick_direction_var, settings, 'ytick_direction')
-        self.set_variable_from_dict(self.ytick2_show_var, settings, 'ytick2_show')
-        self.set_variable_from_dict(self.ytick2_label_show_var, settings, 'ytick2_label_show')
-        self.set_variable_from_dict(self.ytick2_direction_var, settings, 'ytick2_direction')
+        self.set_variable_from_dict(self.ztick_show_var, settings, 'ztick_show', fallback_key='ytick2_show')
+        self.set_variable_from_dict(self.ztick_label_show_var, settings, 'ztick_label_show', fallback_key='ytick2_label_show')
+        self.set_variable_from_dict(self.ztick_direction_var, settings, 'ztick_direction', fallback_key='ytick2_direction')
         
         self.set_variable_from_dict(self.xaxis_plain_format_var, settings, 'xaxis_plain_format')
-        self.set_variable_from_dict(self.yaxis1_plain_format_var, settings, 'yaxis1_plain_format', fallback_key='yaxis_plain_format')
-        self.set_variable_from_dict(self.yaxis2_plain_format_var, settings, 'yaxis2_plain_format')
+        self.set_variable_from_dict(self.yaxis_plain_format_var, settings, 'yaxis_plain_format', fallback_key='yaxis1_plain_format')
+        self.set_variable_from_dict(self.zaxis_plain_format_var, settings, 'zaxis_plain_format', fallback_key='yaxis2_plain_format')
 
         self.set_variable_from_dict(self.xtick_major_interval_var, settings, 'xtick_major_interval')
         self.set_variable_from_dict(self.ytick_major_interval_var, settings, 'ytick_major_interval')
-        self.set_variable_from_dict(self.ytick2_major_interval_var, settings, 'ytick2_major_interval')
+        self.set_variable_from_dict(self.ztick_major_interval_var, settings, 'ztick_major_interval', fallback_key='ytick2_major_interval')
 
         self.set_variable_from_dict(self.spine_top_var, settings, 'spine_top')
         self.set_variable_from_dict(self.spine_bottom_var, settings, 'spine_bottom')
@@ -2685,43 +2152,26 @@ class GraphApp(BASE_CLASS):
         self.set_variable_from_dict(self.legend_loc_var, settings, 'legend_loc')
         
         self.set_variable_from_dict(self.x_log_scale_var, settings, 'x_log_scale')
-        self.set_variable_from_dict(self.y1_log_scale_var, settings, 'y1_log_scale')
-        self.set_variable_from_dict(self.y2_log_scale_var, settings, 'y2_log_scale')
+        self.set_variable_from_dict(self.y_log_scale_var, settings, 'y_log_scale', fallback_key='y1_log_scale')
+        self.set_variable_from_dict(self.z_log_scale_var, settings, 'z_log_scale', fallback_key='y2_log_scale')
 
         self.set_variable_from_dict(self.x_invert_var, settings, 'x_invert')
-        self.set_variable_from_dict(self.y1_invert_var, settings, 'y1_invert')
-        self.set_variable_from_dict(self.y2_invert_var, settings, 'y2_invert')
+        self.set_variable_from_dict(self.y_invert_var, settings, 'y_invert', fallback_key='y1_invert')
+        self.set_variable_from_dict(self.z_invert_var, settings, 'z_invert', fallback_key='y2_invert')
         
-        self.set_variable_from_dict(self.enable_smoothing_var, settings, 'enable_smoothing')
-        self.set_variable_from_dict(self.smoothing_window_var, settings, 'smoothing_window')
-        self.set_variable_from_dict(self.enable_errorbar_var, settings, 'enable_errorbar')
-        self.set_variable_from_dict(self.errorbar_column_var, settings, 'errorbar_column')
-        self.set_variable_from_dict(self.enable_annotation_var, settings, 'enable_annotation')
-        
-        self.set_variable_from_dict(self.data_filter_enabled_var, settings, 'data_filter_enabled')
-        self.set_variable_from_dict(self.filter_min_var, settings, 'filter_min')
-        self.set_variable_from_dict(self.filter_max_var, settings, 'filter_max')
-        self.set_variable_from_dict(self.filter_column_var, settings, 'filter_column')
         self.set_variable_from_dict(self.grid_alpha_var, settings, 'grid_alpha')
-        self.set_variable_from_dict(self.grid_linestyle_var, settings, 'grid_linestyle')
-        self.set_variable_from_dict(self.grid_linewidth_var, settings, 'grid_linewidth')
-        self.set_variable_from_dict(self.subplot_mode_var, settings, 'subplot_mode')
-        self.set_variable_from_dict(self.rotate_labels_var, settings, 'rotate_labels')
-        self.set_variable_from_dict(self.rotation_angle_var, settings, 'rotation_angle')
+        self.set_variable_from_dict(self.view_elev_var, settings, 'view_elev')
+        self.set_variable_from_dict(self.view_azim_var, settings, 'view_azim')
+        self.set_variable_from_dict(self.mesh_resolution_var, settings, 'mesh_resolution')
+        self.set_variable_from_dict(self.colormap_var, settings, 'colormap')
 
         # Restore Listbox selections
         if self.df is not None:
-            self.y_listbox.select_clear(0, tk.END)
-            if 'y_axis_indices' in settings:
-                for i in settings['y_axis_indices']:
-                    if i < self.y_listbox.size():
-                        self.y_listbox.select_set(i)
-                    
-            self.y2_listbox.select_clear(0, tk.END)
-            if 'y2_axis_indices' in settings:
-                for i in settings['y2_axis_indices']:
-                    if i < self.y2_listbox.size():
-                        self.y2_listbox.select_set(i)
+            self.z_listbox.select_clear(0, tk.END)
+            if 'z_axis_indices' in settings:
+                for i in settings['z_axis_indices']:
+                    if i < self.z_listbox.size():
+                        self.z_listbox.select_set(i)
 
         # Update color labels
         self.update_color_label(self.face_color_label, self.face_color_var.get())
@@ -2735,29 +2185,29 @@ class GraphApp(BASE_CLASS):
         if self.df is not None:
             self.plot_graph()
     
-    def open_in_3d_mode(self):
-        """Open the 3D version of the application"""
+    def open_in_2d_mode(self):
+        """Open the 2D version of the application"""
         import subprocess
         script_dir = os.path.dirname(os.path.abspath(__file__))
-        main_3d_path = os.path.join(script_dir, "main_3d.py")
+        main_2d_path = os.path.join(script_dir, "main.py")
         
-        if os.path.exists(main_3d_path):
+        if os.path.exists(main_2d_path):
             try:
-                # Launch 3D version with current project file if available
+                # Launch 2D version with current project file if available
                 if self.current_project_path and os.path.exists(self.current_project_path):
-                    subprocess.Popen([sys.executable, main_3d_path, self.current_project_path])
+                    subprocess.Popen([sys.executable, main_2d_path, self.current_project_path])
                 else:
-                    subprocess.Popen([sys.executable, main_3d_path])
+                    subprocess.Popen([sys.executable, main_2d_path])
             except Exception as e:
-                messagebox.showerror("Launch Error", f"Failed to launch 3D mode:\n{e}")
+                messagebox.showerror("Launch Error", f"Failed to launch 2D mode:\n{e}")
         else:
-            messagebox.showerror("File Not Found", f"3D mode file not found:\n{main_3d_path}")
+            messagebox.showerror("File Not Found", f"2D mode file not found:\n{main_2d_path}")
     
     def show_about(self):
         """Show about dialog"""
-        about_text = f"""HYGrapher ver. {VERSION}
+        about_text = f"""HYGrapher 3D ver. {VERSION}
 
-A flexible graphing application for CSV and Excel data.
+A flexible 3D graphing application for CSV and Excel data.
 
 Author: Hiromichi Yokoyama
 License: Apache-2.0 license
@@ -2767,7 +2217,7 @@ Keyboard Shortcuts:
   Ctrl+O - Open Project
   Ctrl+S - Save Project
 """
-        messagebox.showinfo("About HYGrapher", about_text)
+        messagebox.showinfo("About HYGrapher 3D", about_text)
 
 def main():
     """アプリケーションを起動するメイン関数"""
