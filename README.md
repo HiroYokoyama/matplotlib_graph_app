@@ -1,4 +1,4 @@
-# hygrapher
+# HYGrapher
 
 ## 概要 (Overview)
 
