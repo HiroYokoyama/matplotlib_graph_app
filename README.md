@@ -51,20 +51,8 @@
 
 ## インストール (Installation)
 
-必要なライブラリは、pipを使用してインストールできます。
-
-```bash
-pip install pandas matplotlib tksheet openpyxl
-```
-
-## 使い方 (Usage)
-
-1.  リポジトリをクローンまたはスクリプト (`matplotlib_graph_app.py`) をダウンロードします。
-
-2.  ターミナルでスクリプトを実行します。
-
     ```bash
-    python matplotlib_graph_app.py
+    pip install hygrapher
     ```
 
 3.  **基本的な操作フロー**:
