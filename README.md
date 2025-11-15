@@ -1,4 +1,4 @@
-# Matplotlib Graphing App (ver. 0.1.0)
+# hygrapher
 
 ## 概要 (Overview)
 
