@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: hygrapher
-Version: 0.2.0
+Version: 0.3.0
 Summary: A GUI application for plotting CSV/Excel data with Matplotlib.
 Author-email: HiroYokoyama <titech.yoko.hiro@gmail.com>
 Project-URL: Homepage, https://github.com/HiroYokoyama/matplotlib_graph_app

@@ -22,11 +22,20 @@ import json
 from tksheet import Sheet
 import sys
 
-class GraphApp(tk.Tk):
+# Try to import tkinterdnd2 for drag and drop support
+try:
+    from tkinterdnd2 import TkinterDnD
+    BASE_CLASS = TkinterDnD.Tk
+    DND_AVAILABLE = True
+except ImportError:
+    BASE_CLASS = tk.Tk
+    DND_AVAILABLE = False
+
+class GraphApp(BASE_CLASS):
     def __init__(self):
         super().__init__()
         # 1. UI English: Window Title
-        self.title("HYGrapher ver. 0.2.0")
+        self.title("HYGrapher ver. 0.3.0")
         self.geometry("1600x900") # Keep window size
 
         self.df = None
@@ -58,6 +67,9 @@ class GraphApp(tk.Tk):
         # 1. UI English: Button text
         self.load_button = ttk.Button(top_frame, text="Load Data (CSV/Excel)", command=self.load_data)
         self.load_button.pack(side=tk.LEFT, padx=5)
+
+        self.clear_button = ttk.Button(top_frame, text="Clear All", command=self.clear_all)
+        self.clear_button.pack(side=tk.LEFT, padx=5)
 
         self.save_settings_button = ttk.Button(top_frame, text="Save Project (.pmggrp)", command=self.save_settings)
         self.save_settings_button.pack(side=tk.LEFT, padx=5)
@@ -251,8 +263,7 @@ class GraphApp(tk.Tk):
         self.title_var = tk.StringVar()
         self.xlabel_var = tk.StringVar()
         self.ylabel_var = tk.StringVar()
-        # 1. UI English: Default variable text
-        self.ylabel2_var = tk.StringVar(value="2nd Y-Axis Label")
+        self.ylabel2_var = tk.StringVar()
         
         # --- (★ Style Refactor) ---
         # Remove axis-level style variables (e.g., linestyle_y1_var)
@@ -889,6 +900,59 @@ class GraphApp(tk.Tk):
         except Exception as e:
             messagebox.showerror("Export Error", f"Failed to export data:\n{e}")
     
+    def clear_all(self):
+        """Clear all data and reset the application"""
+        # Confirm with user
+        if messagebox.askyesno("Confirm Clear", "Are you sure you want to clear all data and settings?\nThis cannot be undone."):
+            # Clear data
+            self.df = None
+            self.data_file_path = ""
+            
+            # Clear sheet
+            if self.sheet:
+                self.sheet.destroy()
+                self.sheet = None
+            
+            # Clear graph
+            self.fig.clear()
+            self.ax = self.fig.add_subplot(111)
+            self.ax2 = None
+            self.canvas.draw()
+            
+            # Reset listboxes
+            self.y_listbox.delete(0, tk.END)
+            self.y2_listbox.delete(0, tk.END)
+            
+            # Reset combos
+            self.x_axis_combo['values'] = []
+            self.x_axis_combo['state'] = 'disabled'
+            if hasattr(self, 'errorbar_column_combo'):
+                self.errorbar_column_combo['values'] = []
+            if hasattr(self, 'filter_column_combo'):
+                self.filter_column_combo['values'] = []
+            if hasattr(self, 'style_combo'):
+                self.style_combo['values'] = []
+            
+            # Reset all variables to defaults
+            self.x_axis_var.set("")
+            self.title_var.set("")
+            self.xlabel_var.set("")
+            self.ylabel_var.set("")
+            self.ylabel2_var.set("")
+            
+            # Clear style dictionaries
+            self.y1_series_styles = {}
+            self.y2_series_styles = {}
+            
+            # Reset style editor
+            self.combined_style_target_var.set("")
+            self.load_style_to_editor(None, True)
+            
+            # Disable buttons
+            self.plot_button['state'] = 'disabled'
+            self.export_button['state'] = 'disabled'
+            self.export_data_button['state'] = 'disabled'
+    
     # --- (★ Style Refactor) Callbacks for Style Editor ---
     
     # ★ 1. Consolidate: Remove on_y1_series_select and on_y2_series_select
@@ -1101,10 +1165,8 @@ class GraphApp(tk.Tk):
             self.xlabel_var.set(columns[0])
             if len(columns) > 1:
                 self.y_listbox.select_set(1) # Select 2nd column by default
-                self.ylabel_var.set(columns[1])
             else:
                 self.y_listbox.select_set(0) # Select 1st column
-                self.ylabel_var.set(columns[0])
         
         # (★ ADDED) Update error bar column combo
         if hasattr(self, 'errorbar_column_combo'):
@@ -1827,18 +1889,15 @@ class GraphApp(tk.Tk):
 
     def setup_drag_and_drop(self):
         """Setup drag and drop functionality for file loading"""
-        # Try to use tkinterdnd2 if available
-        try:
-            from tkinterdnd2 import DND_FILES
-            self.drop_target_register(DND_FILES)
-            self.dnd_bind('<<Drop>>', self.on_drop)
-            # Successfully initialized drag and drop
-        except (ImportError, AttributeError, tk.TclError) as e:
-            # tkinterdnd2 not available or not properly initialized
-            # Note: Full drag and drop support requires tkinterdnd2 library
-            # Install with: pip install tkinterdnd2
-            # Application will work without it, but no drag and drop support
-            print(f"Note: Drag and drop not available. Install tkinterdnd2 for this feature. ({type(e).__name__})")
+        if DND_AVAILABLE:
+            try:
+                from tkinterdnd2 import DND_FILES
+                self.drop_target_register(DND_FILES)
+                self.dnd_bind('<<Drop>>', self.on_drop)
+            except Exception as e:
+                print(f"Drag and drop setup failed: {e}")
+        else:
+            pass  # Silently fail if tkinterdnd2 not available
     
     def on_drop(self, event):
         """Handle file drop event"""
@@ -1859,10 +1918,14 @@ class GraphApp(tk.Tk):
                 return
             
             # Handle single file or first file from list
-            file_path = files[0] if isinstance(files, list) else files
+            file_path = files[0] if isinstance(files, (list, tuple)) else files
+            
+            # Convert to string if needed
+            if not isinstance(file_path, str):
+                file_path = str(file_path)
             
             # Remove curly braces if present (Windows formatting)
-            file_path = file_path.strip('{}')
+            file_path = file_path.strip('{}').strip()
             
             # Check file extension
             ext = os.path.splitext(file_path)[1].lower()
@@ -2032,7 +2095,6 @@ class GraphApp(tk.Tk):
         # Redraw graph
         if self.df is not None:
             self.plot_graph()
-            messagebox.showinfo("Success", f"Project loaded from {file_path}.")
 
 def main():
     """アプリケーションを起動するメイン関数"""
