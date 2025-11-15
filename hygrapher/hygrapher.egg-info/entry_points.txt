@@ -1,0 +1,2 @@
+[console_scripts]
+hygrapher = hygrapher.__main__:main

@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hygrapher"
+version = "0.2.0"
+authors = [
+  { name="HiroYokoyama", email="titech.yoko.hiro@gmail.com" },
+]
+description = "A GUI application for plotting CSV/Excel data with Matplotlib."
+requires-python = ">=3.8"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Topic :: Scientific/Engineering :: Visualization",
+]
+
+dependencies = [
+    "pandas",
+    "matplotlib",
+    "tksheet",
+    "openpyxl", 
+]
+
+[project.optional-dependencies]
+dnd = ["tkinterdnd2"]
+
+[project.urls]
+Homepage = "https://github.com/HiroYokoyama/matplotlib_graph_app"
+Issues = "https://github.com/HiroYokoyama/matplotlib_graph_app/issues"
+
+[project.scripts]
+hygrapher = "hygrapher.__main__:main"
+
