@@ -9,6 +9,8 @@ License: Apache-2.0 license
 Repo: https://github.com/HiroYokoyama/matplotlib_graph_app
 """
 
+VERSION = "0.4.0"
+
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, colorchooser
 import pandas as pd
@@ -35,12 +37,13 @@ class GraphApp(BASE_CLASS):
     def __init__(self):
         super().__init__()
         # 1. UI English: Window Title
-        self.title("HYGrapher ver. 0.3.0")
+        self.title(f"HYGrapher ver. {VERSION}")
         self.geometry("1600x900") # Keep window size
 
         self.df = None
         self.sheet = None
         self.data_file_path = "" # Store the path of the loaded file
+        self.current_project_path = "" # Store the path of the current project file
         
         # Enable drag and drop
         self.setup_drag_and_drop()
@@ -56,34 +59,81 @@ class GraphApp(BASE_CLASS):
         self.ax = self.fig.add_subplot(111)
         self.ax2 = None # For 2nd Y-axis
 
+        # === Menu Bar ===
+        menubar = tk.Menu(self)
+        self.config(menu=menubar)
+        
+        # File Menu
+        file_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="File", menu=file_menu)
+        file_menu.add_command(label="Load Data (CSV/Excel)...", command=self.load_data, accelerator="")
+        file_menu.add_separator()
+        file_menu.add_command(label="Open Project...", command=self.load_settings, accelerator="Ctrl+O")
+        file_menu.add_command(label="Save Project", command=self.overwrite_save, accelerator="Ctrl+S")
+        file_menu.add_command(label="Save Project As...", command=self.save_settings, accelerator="")
+        file_menu.add_separator()
+        file_menu.add_command(label="Export Graph...", command=self.export_graph, accelerator="")
+        file_menu.add_command(label="Export Data (CSV)...", command=self.export_filtered_data, accelerator="")
+        file_menu.add_separator()
+        file_menu.add_command(label="Exit", command=self.quit, accelerator="")
+        
+        # Edit Menu
+        edit_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="Edit", menu=edit_menu)
+        edit_menu.add_command(label="Clear All", command=self.clear_all, accelerator="")
+        
+        # Help Menu
+        help_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="Help", menu=help_menu)
+        help_menu.add_command(label="About", command=self.show_about, accelerator="")
+
         # === Main Layout ===
         main_frame = ttk.Frame(self)
         main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
         # --- Top Frame (File Operations) ---
         top_frame = ttk.Frame(main_frame)
-        top_frame.pack(fill=tk.X)
+        top_frame.pack(fill=tk.X, pady=(0, 5))
 
-        # 1. UI English: Button text
-        self.load_button = ttk.Button(top_frame, text="Load Data (CSV/Excel)", command=self.load_data)
-        self.load_button.pack(side=tk.LEFT, padx=5)
-
-        self.clear_button = ttk.Button(top_frame, text="Clear All", command=self.clear_all)
-        self.clear_button.pack(side=tk.LEFT, padx=5)
-
-        self.save_settings_button = ttk.Button(top_frame, text="Save Project (.pmggrp)", command=self.save_settings)
-        self.save_settings_button.pack(side=tk.LEFT, padx=5)
+        # Data Operations Frame (Left)
+        data_ops_frame = ttk.LabelFrame(top_frame, text="Data")
+        data_ops_frame.pack(side=tk.LEFT, padx=(0, 5))
         
-        self.load_settings_button = ttk.Button(top_frame, text="Load Project (.pmggrp)", command=self.load_settings)
-        self.load_settings_button.pack(side=tk.LEFT, padx=5)
+        self.load_button = ttk.Button(data_ops_frame, text="Load Data", command=self.load_data, width=12)
+        self.load_button.pack(side=tk.LEFT, padx=2, pady=2)
 
-        self.export_button = ttk.Button(top_frame, text="Export Graph (Image)", command=self.export_graph)
-        self.export_button.pack(side=tk.LEFT, padx=5)
+        self.clear_button = ttk.Button(data_ops_frame, text="Clear All", command=self.clear_all, width=12)
+        self.clear_button.pack(side=tk.LEFT, padx=2, pady=2)
+
+        # Project Operations Frame (Center)
+        project_ops_frame = ttk.LabelFrame(top_frame, text="Project")
+        project_ops_frame.pack(side=tk.LEFT, padx=5)
+        
+        self.load_settings_button = ttk.Button(project_ops_frame, text="Open", command=self.load_settings, width=10)
+        self.load_settings_button.pack(side=tk.LEFT, padx=2, pady=2)
+        
+        self.overwrite_save_button = ttk.Button(project_ops_frame, text="Save", command=self.overwrite_save, width=10)
+        self.overwrite_save_button.pack(side=tk.LEFT, padx=2, pady=2)
+        self.overwrite_save_button['state'] = 'disabled'
+        
+        self.save_settings_button = ttk.Button(project_ops_frame, text="Save As...", command=self.save_settings, width=10)
+        self.save_settings_button.pack(side=tk.LEFT, padx=2, pady=2)
+
+        # Export Operations Frame (Right)
+        export_ops_frame = ttk.LabelFrame(top_frame, text="Export")
+        export_ops_frame.pack(side=tk.LEFT, padx=(5, 0))
+        
+        self.export_button = ttk.Button(export_ops_frame, text="Graph", command=self.export_graph, width=10)
+        self.export_button.pack(side=tk.LEFT, padx=2, pady=2)
         self.export_button['state'] = 'disabled'
         
-        self.export_data_button = ttk.Button(top_frame, text="Export Filtered Data (CSV)", command=self.export_filtered_data)
-        self.export_data_button.pack(side=tk.LEFT, padx=5)
+        self.export_data_button = ttk.Button(export_ops_frame, text="Data", command=self.export_filtered_data, width=10)
+        self.export_data_button.pack(side=tk.LEFT, padx=2, pady=2)
         self.export_data_button['state'] = 'disabled'
+        
+        # Bind keyboard shortcuts
+        self.bind('<Control-s>', lambda e: self.overwrite_save())
+        self.bind('<Control-o>', lambda e: self.load_settings())
 
         # --- Content Frame (Split) ---
         # 2. Layout: Use PanedWindow for resizable 1:1 split
@@ -907,6 +957,7 @@ class GraphApp(BASE_CLASS):
             # Clear data
             self.df = None
             self.data_file_path = ""
+            self.current_project_path = ""
             
             # Clear sheet
             if self.sheet:
@@ -952,6 +1003,7 @@ class GraphApp(BASE_CLASS):
             self.plot_button['state'] = 'disabled'
             self.export_button['state'] = 'disabled'
             self.export_data_button['state'] = 'disabled'
+            self.overwrite_save_button['state'] = 'disabled'
     
     # --- (★ Style Refactor) Callbacks for Style Editor ---
     
@@ -1355,10 +1407,126 @@ class GraphApp(BASE_CLASS):
         try:
             with open(file_path, 'w', encoding='utf-8') as f:
                 json.dump(settings, f, indent=4)
+            # Store current project path and enable overwrite save button
+            self.current_project_path = file_path
+            self.overwrite_save_button['state'] = 'normal'
             # 1. UI English: Messagebox
             messagebox.showinfo("Success", f"Project saved to {file_path}.")
         except Exception as e:
             # 1. UI English: Messagebox
+            messagebox.showerror("Save Error", f"Failed to save project:\n{e}")
+
+    def overwrite_save(self):
+        """Overwrite save to current project file (Ctrl+S)"""
+        if not self.current_project_path:
+            # No current project, do Save As
+            self.save_settings()
+            return
+        
+        # Get current edited data from sheet
+        self.get_data_from_sheet()
+        
+        # Convert DataFrame to list format for JSON serialization
+        data_dict = None
+        if self.df is not None and not self.df.empty:
+            data_dict = {
+                "columns": self.df.columns.tolist(),
+                "data": self.df.values.tolist()
+            }
+            
+        settings = {
+            "edited_data": data_dict,
+            "original_file_path": self.data_file_path,
+            "plot_type": self.plot_type_var.get(),
+            "x_axis": self.x_axis_var.get(),
+            "y_axis_indices": list(self.y_listbox.curselection()),
+            "y2_axis_indices": list(self.y2_listbox.curselection()),
+            "title": self.title_var.get(),
+            "xlabel": self.xlabel_var.get(),
+            "ylabel": self.ylabel_var.get(),
+            "ylabel2": self.ylabel2_var.get(),
+            
+            "y1_series_styles": self.y1_series_styles,
+            "y2_series_styles": self.y2_series_styles,
+
+            "grid": self.grid_var.get(),
+            "marker": self.marker_var.get(),
+            
+            "font_family": self.font_family_var.get(),
+            "title_fontsize": self.title_fontsize_var.get(),
+            "xlabel_fontsize": self.xlabel_fontsize_var.get(),
+            "ylabel_fontsize": self.ylabel_fontsize_var.get(),
+            "ylabel2_fontsize": self.ylabel2_fontsize_var.get(),
+            "tick_fontsize": self.tick_fontsize_var.get(),
+            "tick2_fontsize": self.tick2_fontsize_var.get(),
+            "fig_width": self.fig_width_var.get(),
+            "fig_height": self.fig_height_var.get(),
+            
+            "xlim_min": self.xlim_min_var.get(),
+            "xlim_max": self.xlim_max_var.get(),
+            "ylim_min": self.ylim_min_var.get(),
+            "ylim_max": self.ylim_max_var.get(),
+            "ylim2_min": self.ylim2_min_var.get(),
+            "ylim2_max": self.ylim2_max_var.get(),
+            "xtick_show": self.xtick_show_var.get(),
+            "xtick_label_show": self.xtick_label_show_var.get(),
+            "xtick_direction": self.xtick_direction_var.get(),
+            "ytick_show": self.ytick_show_var.get(),
+            "ytick_label_show": self.ytick_label_show_var.get(),
+            "ytick_direction": self.ytick_direction_var.get(),
+            "ytick2_show": self.ytick2_show_var.get(),
+            "ytick2_label_show": self.ytick2_label_show_var.get(),
+            "ytick2_direction": self.ytick2_direction_var.get(),
+            
+            "xaxis_plain_format": self.xaxis_plain_format_var.get(),
+            "yaxis1_plain_format": self.yaxis1_plain_format_var.get(),
+            "yaxis2_plain_format": self.yaxis2_plain_format_var.get(),
+            
+            "xtick_major_interval": self.xtick_major_interval_var.get(),
+            "ytick_major_interval": self.ytick_major_interval_var.get(),
+            "ytick2_major_interval": self.ytick2_major_interval_var.get(),
+            
+            "spine_top": self.spine_top_var.get(),
+            "spine_bottom": self.spine_bottom_var.get(),
+            "spine_left": self.spine_left_var.get(),
+            "spine_right": self.spine_right_var.get(),
+            "face_color": self.face_color_var.get(),
+            "fig_color": self.fig_color_var.get(),
+            
+            "legend_show": self.legend_show_var.get(),
+            "legend_loc": self.legend_loc_var.get(),
+            
+            "x_log_scale": self.x_log_scale_var.get(),
+            "y1_log_scale": self.y1_log_scale_var.get(),
+            "y2_log_scale": self.y2_log_scale_var.get(),
+
+            "x_invert": self.x_invert_var.get(),
+            "y1_invert": self.y1_invert_var.get(),
+            "y2_invert": self.y2_invert_var.get(),
+            
+            "enable_smoothing": self.enable_smoothing_var.get(),
+            "smoothing_window": self.smoothing_window_var.get(),
+            "enable_errorbar": self.enable_errorbar_var.get(),
+            "errorbar_column": self.errorbar_column_var.get(),
+            "enable_annotation": self.enable_annotation_var.get(),
+            
+            "data_filter_enabled": self.data_filter_enabled_var.get(),
+            "filter_min": self.filter_min_var.get(),
+            "filter_max": self.filter_max_var.get(),
+            "filter_column": self.filter_column_var.get(),
+            "grid_alpha": self.grid_alpha_var.get(),
+            "grid_linestyle": self.grid_linestyle_var.get(),
+            "grid_linewidth": self.grid_linewidth_var.get(),
+            "subplot_mode": self.subplot_mode_var.get(),
+            "rotate_labels": self.rotate_labels_var.get(),
+            "rotation_angle": self.rotation_angle_var.get(),
+        }
+        
+        try:
+            with open(self.current_project_path, 'w', encoding='utf-8') as f:
+                json.dump(settings, f, indent=4)
+            messagebox.showinfo("Success", f"Project saved to {self.current_project_path}.")
+        except Exception as e:
             messagebox.showerror("Save Error", f"Failed to save project:\n{e}")
 
     def load_settings(self):
@@ -2092,9 +2260,29 @@ class GraphApp(BASE_CLASS):
         self.update_color_label(self.face_color_label, self.face_color_var.get())
         self.update_color_label(self.fig_color_label, self.fig_color_var.get())
 
+        # Store current project path and enable overwrite save button
+        self.current_project_path = file_path
+        self.overwrite_save_button['state'] = 'normal'
+        
         # Redraw graph
         if self.df is not None:
             self.plot_graph()
+    
+    def show_about(self):
+        """Show about dialog"""
+        about_text = f"""HYGrapher ver. {VERSION}
+
+A flexible graphing application for CSV and Excel data.
+
+Author: Hiromichi Yokoyama
+License: Apache-2.0 license
+Repository: https://github.com/HiroYokoyama/matplotlib_graph_app
+
+Keyboard Shortcuts:
+  Ctrl+O - Open Project
+  Ctrl+S - Save Project
+"""
+        messagebox.showinfo("About HYGrapher", about_text)
 
 def main():
     """アプリケーションを起動するメイン関数"""
