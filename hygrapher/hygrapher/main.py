@@ -1278,23 +1278,259 @@ class GraphApp(BASE_CLASS):
                     if plot_type == "line" and self.enable_smoothing_var.get() and len(plot_y) >= self.smoothing_window_var.get():
                         plot_y = plot_y.rolling(window=self.smoothing_window_var.get(), center=True).mean().fillna(plot_y)
 
+                    # Error bars (Y1 first series only)
+                    errorbar_vals = None
+                    if (self.enable_errorbar_var.get() and not is_twin_ax
+                            and self.errorbar_column_var.get()
+                            and self.errorbar_column_var.get() in plot_df.columns):
+                        err_cleaned = plot_df[self.errorbar_column_var.get()].astype(str).str.replace(r'[^\d.-]', '', regex=True)
+                        err_numeric = pd.to_numeric(err_cleaned, errors='coerce')
+                        errorbar_vals = err_numeric.reindex(valid_df.index).values
+
                     kwargs = {'marker': markerstyle, 'markersize': markersize, 'alpha': alpha, 'label': display_label}
                     if color:
                         kwargs['color'] = color
 
                     if plot_type == "line":
                         kwargs.update({'linestyle': linestyle, 'linewidth': linewidth})
-                        ax.plot(plot_x, plot_y, **kwargs)
+                        if errorbar_vals is not None:
+                            kwargs['yerr'] = errorbar_vals
+                            kwargs['capsize'] = 3
+                            ax.errorbar(plot_x, plot_y, **kwargs)
+                        else:
+                            ax.plot(plot_x, plot_y, **kwargs)
                     elif plot_type == "scatter":
-                        ax.scatter(plot_x, plot_y, **kwargs)
+                        if errorbar_vals is not None:
+                            kwargs['yerr'] = errorbar_vals
+                            kwargs['capsize'] = 3
+                            fmt = markerstyle if markerstyle != 'None' else 'o'
+                            ax.errorbar(plot_x, plot_y, fmt=fmt, **{k: v for k, v in kwargs.items() if k != 'marker'})
+                        else:
+                            ax.scatter(plot_x, plot_y, **kwargs)
                     elif plot_type == "step":
                         kwargs.update({'linestyle': linestyle, 'linewidth': linewidth})
                         ax.step(plot_x, plot_y, where='mid', **kwargs)
                     elif plot_type == "area":
                         kwargs.update({'linestyle': linestyle, 'linewidth': linewidth})
                         ax.fill_between(plot_x, 0, plot_y, **kwargs)
+                    elif plot_type == "stem":
+                        stem_kw = {'label': display_label}
+                        if color:
+                            stem_kw['linefmt'] = color
+                            stem_kw['markerfmt'] = color + 'o'
+                        ml, sl, _ = ax.stem(plot_x, plot_y, **stem_kw)
+                        ml.set_alpha(alpha)
+                        sl.set_alpha(alpha)
 
-            # Loop through all X-Tabs and plot
+                    # Annotations (Y1 first series only)
+                    if self.enable_annotation_var.get() and not is_twin_ax:
+                        for i, (xi, yi) in enumerate(zip(plot_x, plot_y)):
+                            if i % max(1, len(plot_x) // 10) == 0:
+                                ax.annotate(f'{yi:.2f}', (xi, yi),
+                                            textcoords='offset points', xytext=(0, 5),
+                                            ha='center', fontsize=8)
+
+            # ── Special plot types that bypass the per-series helper ──────────
+            # These need the full tab's x_col and all y_cols at once.
+            # Use the first X-Tab's data for these plot types.
+            _first_tab = x_tabs_info[0] if x_tabs_info else {}
+            _x_col_0   = _first_tab.get("x_axis", "")
+            _y1_cols_0 = _first_tab.get("y1_cols", [])
+            _x0_raw    = plot_df[_x_col_0] if _x_col_0 and _x_col_0 in plot_df.columns else None
+
+            def _to_numeric_series(col):
+                return pd.to_numeric(
+                    plot_df[col].astype(str).str.replace(r'[^\d.-]', '', regex=True),
+                    errors='coerce'
+                )
+
+            def _finish_special():
+                """Draw, resize and return True (signals early exit)."""
+                self.fig.tight_layout(pad=self.tight_layout_pad_var.get())
+                self.canvas.draw()
+                fig_w = self.fig.get_figwidth() * self.fig.dpi
+                fig_h = self.fig.get_figheight() * self.fig.dpi
+                self.canvas.get_tk_widget().config(width=int(fig_w), height=int(fig_h))
+                self.graph_frame.update_idletasks()
+                self.on_graph_frame_configure(None)
+                self.scrollable_canvas.update_idletasks()
+                return True
+
+            if plot_type == "pie":
+                if not _y1_cols_0:
+                    messagebox.showwarning("No Data", "Pie chart requires at least one Y column.")
+                    return
+                y_col = _y1_cols_0[0]
+                y_num = _to_numeric_series(y_col)
+                valid = pd.DataFrame({'x': _x0_raw, 'y': y_num}).dropna()
+                if valid.empty:
+                    messagebox.showwarning("No Valid Data", "Pie chart requires valid numeric data.")
+                    return
+                self.ax.pie(valid['y'], labels=valid['x'].astype(str), autopct='%1.1f%%', startangle=90)
+                self.ax.axis('equal')
+                if self.title_var.get():
+                    self.ax.set_title(self.title_var.get(), fontsize=self.title_fontsize_var.get(),
+                                      fontfamily=self.font_family_var.get())
+                _finish_special()
+                return
+
+            elif plot_type == "box":
+                if not _y1_cols_0:
+                    messagebox.showwarning("No Data", "Box plot requires at least one Y column.")
+                    return
+                box_data, box_labels = [], []
+                for yc in _y1_cols_0:
+                    d = _to_numeric_series(yc).dropna()
+                    if len(d) > 0:
+                        box_data.append(d)
+                        box_labels.append(yc)
+                if not box_data:
+                    messagebox.showwarning("No Valid Data", "Box plot requires valid numeric data.")
+                    return
+                self.ax.boxplot(box_data, labels=box_labels)
+                if self.title_var.get():
+                    self.ax.set_title(self.title_var.get(), fontsize=self.title_fontsize_var.get(),
+                                      fontfamily=self.font_family_var.get())
+                if self.grid_var.get():
+                    self.ax.grid(True, alpha=self.grid_alpha_var.get(), axis='y')
+                _finish_special()
+                return
+
+            elif plot_type == "violin":
+                if not _y1_cols_0:
+                    messagebox.showwarning("No Data", "Violin plot requires at least one Y column.")
+                    return
+                v_data, v_labels = [], []
+                for yc in _y1_cols_0:
+                    d = _to_numeric_series(yc).dropna()
+                    if len(d) > 0:
+                        v_data.append(d)
+                        v_labels.append(yc)
+                if not v_data:
+                    messagebox.showwarning("No Valid Data", "Violin plot requires valid numeric data.")
+                    return
+                self.ax.violinplot(v_data, showmeans=True, showmedians=True)
+                self.ax.set_xticks(range(1, len(v_labels) + 1))
+                self.ax.set_xticklabels(v_labels)
+                if self.title_var.get():
+                    self.ax.set_title(self.title_var.get(), fontsize=self.title_fontsize_var.get(),
+                                      fontfamily=self.font_family_var.get())
+                if self.grid_var.get():
+                    self.ax.grid(True, alpha=self.grid_alpha_var.get(), axis='y')
+                _finish_special()
+                return
+
+            elif plot_type == "heatmap":
+                if not _y1_cols_0:
+                    messagebox.showwarning("No Data", "Heatmap requires at least one Y column.")
+                    return
+                hmap = []
+                for yc in _y1_cols_0:
+                    d = _to_numeric_series(yc).fillna(0)
+                    hmap.append(d.values)
+                hmap_arr = np.array(hmap)
+                cmap = self.colormap_var.get() or 'viridis'
+                im = self.ax.imshow(hmap_arr, aspect='auto', cmap=cmap, interpolation='nearest')
+                self.ax.set_yticks(range(len(_y1_cols_0)))
+                self.ax.set_yticklabels(_y1_cols_0)
+                self.ax.set_xlabel(_x_col_0, fontsize=self.xlabel_fontsize_var.get(),
+                                   fontfamily=self.font_family_var.get())
+                self.ax.set_ylabel('Data Series', fontsize=self.ylabel_fontsize_var.get(),
+                                   fontfamily=self.font_family_var.get())
+                if self.title_var.get():
+                    self.ax.set_title(self.title_var.get(), fontsize=self.title_fontsize_var.get(),
+                                      fontfamily=self.font_family_var.get())
+                cbar = self.fig.colorbar(im, ax=self.ax)
+                cbar.set_label('Value', fontsize=self.ylabel_fontsize_var.get(),
+                               fontfamily=self.font_family_var.get())
+                _finish_special()
+                return
+
+            elif plot_type == "contour":
+                if len(_y1_cols_0) < 2:
+                    messagebox.showwarning("Insufficient Columns",
+                        "Contour plot requires at least 2 Y columns (Y-coord, Z-value).")
+                    return
+                if _x0_raw is None:
+                    return
+                x_num = pd.to_numeric(_x0_raw.astype(str).str.replace(r'[^\d.-]', '', regex=True), errors='coerce')
+                y_num = _to_numeric_series(_y1_cols_0[0])
+                z_num = _to_numeric_series(_y1_cols_0[1])
+                valid = pd.DataFrame({'x': x_num, 'y': y_num, 'z': z_num}).dropna()
+                if len(valid) < 10:
+                    messagebox.showwarning("Insufficient Data",
+                        "Contour plot requires at least 10 data points.")
+                    return
+                if valid['x'].nunique() < 2 or valid['y'].nunique() < 2 or valid['z'].nunique() < 2:
+                    messagebox.showwarning("Insufficient Variation",
+                        "Contour plot requires variation in X, Y, and Z values.")
+                    return
+                xi = np.linspace(valid['x'].min(), valid['x'].max(), 50)
+                yi = np.linspace(valid['y'].min(), valid['y'].max(), 50)
+                Xi, Yi = np.meshgrid(xi, yi)
+                cmap = self.colormap_var.get() or 'viridis'
+                try:
+                    Zi = griddata((valid['x'].values, valid['y'].values), valid['z'].values,
+                                  (Xi, Yi), method='linear')
+                    if np.all(np.isnan(Zi)):
+                        raise ValueError("All NaN after interpolation")
+                    mask = np.isnan(Zi)
+                    if np.any(mask):
+                        Zi_nn = griddata((valid['x'].values, valid['y'].values), valid['z'].values,
+                                         (Xi, Yi), method='nearest')
+                        Zi = np.where(mask, Zi_nn, Zi)
+                    cf = self.ax.contourf(Xi, Yi, Zi, levels=15, cmap=cmap)
+                    cbar = self.fig.colorbar(cf, ax=self.ax)
+                    cbar.set_label(_y1_cols_0[1], fontsize=self.ylabel_fontsize_var.get(),
+                                   fontfamily=self.font_family_var.get())
+                    self.ax.set_xlabel(_x_col_0, fontsize=self.xlabel_fontsize_var.get(),
+                                       fontfamily=self.font_family_var.get())
+                    self.ax.set_ylabel(_y1_cols_0[0], fontsize=self.ylabel_fontsize_var.get(),
+                                       fontfamily=self.font_family_var.get())
+                    if self.title_var.get():
+                        self.ax.set_title(self.title_var.get(), fontsize=self.title_fontsize_var.get(),
+                                          fontfamily=self.font_family_var.get())
+                    if self.grid_var.get():
+                        self.ax.grid(True, alpha=self.grid_alpha_var.get())
+                    _finish_special()
+                    return
+                except Exception as e:
+                    messagebox.showerror("Contour Error",
+                        f"Failed to create contour plot:\n{e}\n\n"
+                        "Tip: Ensure data points are well-distributed in 2D space.")
+                    return
+
+            elif plot_type == "polar":
+                if not _y1_cols_0:
+                    messagebox.showwarning("No Data", "Polar plot requires at least one Y column.")
+                    return
+                self.fig.clear()
+                self.ax = self.fig.add_subplot(111, projection='polar')
+                self.ax2 = None
+                x_num = pd.to_numeric(
+                    _x0_raw.astype(str).str.replace(r'[^\d.-]', '', regex=True)
+                    if _x0_raw is not None else pd.Series(dtype=float),
+                    errors='coerce'
+                )
+                for yc in _y1_cols_0:
+                    y_num = _to_numeric_series(yc)
+                    valid = pd.DataFrame({'x': x_num, 'y': y_num}).dropna()
+                    if not valid.empty:
+                        theta = np.radians(valid['x'].values)
+                        self.ax.plot(theta, valid['y'].values, label=yc, marker='o', markersize=4)
+                if self.title_var.get():
+                    self.ax.set_title(self.title_var.get(), fontsize=self.title_fontsize_var.get(),
+                                      fontfamily=self.font_family_var.get(), pad=20)
+                if self.legend_show_var.get():
+                    self.ax.legend(loc=self.legend_loc_var.get(),
+                                   prop={'family': self.font_family_var.get(),
+                                         'size': self.legend_fontsize_var.get()})
+                if self.grid_var.get():
+                    self.ax.grid(True, alpha=self.grid_alpha_var.get())
+                _finish_special()
+                return
+
+            # ── Standard plot types: loop through X-Tabs ─────────────────────
             num_tabs = len(x_tabs_info)
             for tab_idx, tab_data in enumerate(x_tabs_info):
                 x_col = tab_data["x_axis"]
@@ -1372,6 +1608,23 @@ class GraphApp(BASE_CLASS):
                 labelsize=self.tick_fontsize_var.get()
             )
 
+            # Apply tick font family
+            font_family = self.font_family_var.get()
+            for lbl in self.ax.get_xticklabels() + self.ax.get_yticklabels():
+                lbl.set_fontfamily(font_family)
+
+            # Apply x-tick label rotation
+            if self.rotate_labels_var.get():
+                self.ax.tick_params(axis='x', rotation=self.rotation_angle_var.get())
+                for lbl in self.ax.get_xticklabels():
+                    lbl.set_ha('right')
+
+            # Plain number format (suppress scientific notation)
+            if self.xaxis_plain_format_var.get():
+                self.ax.ticklabel_format(style='plain', axis='x', useOffset=False)
+            if self.yaxis1_plain_format_var.get():
+                self.ax.ticklabel_format(style='plain', axis='y', useOffset=False)
+
             apply_major_ticker(self.ax.xaxis, self.xtick_major_interval_var.get(), self.x_log_scale_var.get())
             apply_major_ticker(self.ax.yaxis, self.ytick_major_interval_var.get(), self.y1_log_scale_var.get())
             apply_minor_ticker(self.ax.xaxis, self.xtick_minor_show_var.get(), self.xtick_minor_interval_var.get(), self.x_log_scale_var.get())
@@ -1387,15 +1640,83 @@ class GraphApp(BASE_CLASS):
             if self.ax2:
                 self.ax2.set_ylabel(self.ylabel2_var.get() if self.ylabel2_var.get() else "Y2-Values", fontsize=self.ylabel2_fontsize_var.get(), fontfamily=font_family)
                 self.set_axis_limits(self.ax2, 'y', self.ylim2_min_var.get(), self.ylim2_max_var.get())
+
+                try:
+                    self.ax2.set_yscale('log' if self.y2_log_scale_var.get() else 'linear')
+                except ValueError:
+                    self.y2_log_scale_var.set(False)
+                    self.ax2.set_yscale('linear')
+                if self.y2_invert_var.get():
+                    self.ax2.invert_yaxis()
+
+                self.ax2.tick_params(axis='y', which='both',
+                                     direction=self.ytick2_direction_var.get(),
+                                     right=self.ytick2_show_var.get(),
+                                     labelright=self.ytick2_label_show_var.get(),
+                                     labelsize=self.tick2_fontsize_var.get())
+                for lbl in self.ax2.get_yticklabels():
+                    lbl.set_fontfamily(font_family)
+
+                if self.rotate_labels_var.get() and self.subplot_mode_var.get():
+                    self.ax2.tick_params(axis='x', rotation=self.rotation_angle_var.get())
+                    for lbl in self.ax2.get_xticklabels():
+                        lbl.set_ha('right')
+
+                if self.yaxis2_plain_format_var.get():
+                    self.ax2.ticklabel_format(style='plain', axis='y', useOffset=False)
+
                 apply_major_ticker(self.ax2.yaxis, self.ytick2_major_interval_var.get(), self.y2_log_scale_var.get())
                 apply_minor_ticker(self.ax2.yaxis, self.ytick2_minor_show_var.get(), self.ytick2_minor_interval_var.get(), self.y2_log_scale_var.get())
 
-            # Legend
+                # Spine management for twin vs subplot mode
+                if not self.subplot_mode_var.get():
+                    self.ax.spines['right'].set_visible(False)
+                    self.ax2.spines['top'].set_visible(self.spine_top_var.get())
+                    self.ax2.spines['bottom'].set_visible(self.spine_bottom_var.get())
+                    self.ax2.spines['left'].set_visible(False)
+                    self.ax2.spines['right'].set_visible(self.spine_right_var.get())
+                else:
+                    self.ax2.spines['top'].set_visible(self.spine_top_var.get())
+                    self.ax2.spines['bottom'].set_visible(self.spine_bottom_var.get())
+                    self.ax2.spines['left'].set_visible(self.spine_left_var.get())
+                    self.ax2.spines['right'].set_visible(self.spine_right_var.get())
+                    self.ax2.set_facecolor(self.face_color_var.get())
+
+                    if self.subplot_mode_var.get():
+                        x_col_0 = x_tabs_info[0]['x_axis'] if x_tabs_info else ''
+                        y2_names = [c for tab in x_tabs_info for c in tab['y2_cols']]
+                        self.ax2.set_xlabel(
+                            self.xlabel_var.get() if self.xlabel_var.get() else x_col_0,
+                            fontsize=self.xlabel_fontsize_var.get(), fontfamily=font_family
+                        )
+                        self.ax2.set_title(
+                            self.ylabel2_var.get() if self.ylabel2_var.get() else ', '.join(y2_names),
+                            fontsize=self.title_fontsize_var.get(), fontfamily=font_family
+                        )
+                        if self.grid_var.get():
+                            self.ax2.grid(True, alpha=self.grid_alpha_var.get(),
+                                          linestyle=self.grid_linestyle_var.get(),
+                                          linewidth=self.grid_linewidth_var.get())
+            else:
+                # No ax2: right spine follows spine_right_var
+                self.ax.spines['right'].set_visible(self.spine_right_var.get())
+
+            # Legend (subplot mode: separate legends per axis)
             if self.legend_show_var.get():
                 legend_props = {'family': font_family, 'size': self.legend_fontsize_var.get()}
-                h1, l1 = self.ax.get_legend_handles_labels()
-                h2, l2 = (self.ax2.get_legend_handles_labels() if self.ax2 else ([], []))
-                self.ax.legend(handles=h1 + h2, labels=l1 + l2, loc=self.legend_loc_var.get(), prop=legend_props)
+                if self.subplot_mode_var.get() and self.ax2:
+                    h1, l1 = self.ax.get_legend_handles_labels()
+                    if h1:
+                        self.ax.legend(handles=h1, labels=l1, loc=self.legend_loc_var.get(), prop=legend_props)
+                    h2, l2 = self.ax2.get_legend_handles_labels()
+                    if h2:
+                        self.ax2.legend(handles=h2, labels=l2, loc=self.legend_loc_var.get(), prop=legend_props)
+                else:
+                    h1, l1 = self.ax.get_legend_handles_labels()
+                    h2, l2 = (self.ax2.get_legend_handles_labels()
+                              if self.ax2 and not self.subplot_mode_var.get() else ([], []))
+                    self.ax.legend(handles=h1 + h2, labels=l1 + l2,
+                                   loc=self.legend_loc_var.get(), prop=legend_props)
 
             pad_val = self.tight_layout_pad_var.get()
             self.fig.tight_layout(pad=pad_val)
@@ -1406,6 +1727,7 @@ class GraphApp(BASE_CLASS):
             self.canvas.get_tk_widget().config(width=int(fig_width_px), height=int(fig_height_px))
             self.graph_frame.update_idletasks()
             self.on_graph_frame_configure(None)
+            self.scrollable_canvas.update_idletasks()
 
         except Exception as e:
             messagebox.showerror("Plot Error", f"Failed to plot graph:\n{e}")
