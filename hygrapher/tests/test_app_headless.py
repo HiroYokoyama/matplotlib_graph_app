@@ -4,14 +4,15 @@ Granular PyQt6 Headless Test Suite for HyGrapher 2D & 3D.
 """
 
 import os
+
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
 
 import pytest
-import pandas as pd
 
 from PyQt6.QtWidgets import QApplication
 import matplotlib
-matplotlib.use('Agg')
+
+matplotlib.use("Agg")
 
 from hygrapher.main import GraphApp as GraphApp2D
 from hygrapher.main_3d import GraphApp as GraphApp3D
@@ -29,7 +30,9 @@ def qapp():
 @pytest.fixture(scope="module")
 def sample_csv(tmp_path_factory):
     p = tmp_path_factory.mktemp("data") / "sample.csv"
-    p.write_text("Time,Val1,Val2,Err\n1,10,100,0.5\n2,25,200,1.0\n3,15,300,1.5\n4,40,250,2.0\n5,30,500,2.5\n")
+    p.write_text(
+        "Time,Val1,Val2,Err\n1,10,100,0.5\n2,25,200,1.0\n3,15,300,1.5\n4,40,250,2.0\n5,30,500,2.5\n"
+    )
     return str(p)
 
 
@@ -62,10 +65,23 @@ def app3d(sample_csv):
 
 
 # ── 2D Plot Types Parameterized Tests (12 Tests) ──────────────────────────────
-@pytest.mark.parametrize("plot_type", [
-    "line", "scatter", "bar", "step", "stem", "area",
-    "pie", "box", "violin", "heatmap", "contour", "polar"
-])
+@pytest.mark.parametrize(
+    "plot_type",
+    [
+        "line",
+        "scatter",
+        "bar",
+        "step",
+        "stem",
+        "area",
+        "pie",
+        "box",
+        "violin",
+        "heatmap",
+        "contour",
+        "polar",
+    ],
+)
 def test_2d_plot_type(app2d, plot_type):
     idx = app2d.plot_type_combo.findText(plot_type)
     assert idx >= 0
@@ -78,9 +94,9 @@ def test_2d_plot_type(app2d, plot_type):
 
 
 # ── 3D Plot Types Parameterized Tests (5 Tests) ───────────────────────────────
-@pytest.mark.parametrize("plot_type", [
-    "surface", "wireframe", "contour3d", "scatter3d", "line3d"
-])
+@pytest.mark.parametrize(
+    "plot_type", ["surface", "wireframe", "contour3d", "scatter3d", "line3d"]
+)
 def test_3d_plot_type(app3d, plot_type):
     idx = app3d.plot_type_combo.findText(plot_type)
     assert idx >= 0
@@ -112,7 +128,9 @@ def test_2d_advanced_data_filter(app2d):
     app2d.filter_max_input.setText("35")
     app2d.plot_graph()
 
-    df_filtered = app2d.data_mgr.get_filtered_df(filter_enabled=True, filter_column="Val1", min_val_str="15", max_val_str="35")
+    df_filtered = app2d.data_mgr.get_filtered_df(
+        filter_enabled=True, filter_column="Val1", min_val_str="15", max_val_str="35"
+    )
     assert len(df_filtered) == 3
 
 

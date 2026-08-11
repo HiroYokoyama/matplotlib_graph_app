@@ -1,6 +1,4 @@
 # -*- coding: utf-8 -*-
-import pytest
-import pandas as pd
 from hygrapher.data_manager import DataManager
 
 
@@ -18,7 +16,9 @@ def test_data_manager_load_and_filter(tmp_path):
     assert len(dm.raw_df) == 4
 
     # Test non-destructive filtering
-    filtered_df = dm.get_filtered_df(filter_enabled=True, filter_column="Temp", min_val_str="20", max_val_str="30")
+    filtered_df = dm.get_filtered_df(
+        filter_enabled=True, filter_column="Temp", min_val_str="20", max_val_str="30"
+    )
     assert len(filtered_df) == 2
     assert list(filtered_df["Temp"]) == ["20", "30"]
 

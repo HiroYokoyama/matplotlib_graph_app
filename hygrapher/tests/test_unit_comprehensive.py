@@ -1,14 +1,9 @@
 # -*- coding: utf-8 -*-
-import pytest
-import os
 import json
 import pandas as pd
-import numpy as np
 from unittest.mock import MagicMock
 
 from hygrapher.utils import (
-    bind_scroll_events,
-    bind_mousewheel_recursive,
     get_font_list,
     apply_major_ticker,
     apply_minor_ticker,
@@ -48,7 +43,9 @@ def test_data_manager_complete(tmp_path):
     assert dm.get_columns() == ["X", "Y", "Z"]
 
     # Test filtering min & max
-    f1 = dm.get_filtered_df(filter_enabled=True, filter_column="Y", min_val_str="20", max_val_str="30")
+    f1 = dm.get_filtered_df(
+        filter_enabled=True, filter_column="Y", min_val_str="20", max_val_str="30"
+    )
     assert len(f1) == 2
     assert list(f1["Y"]) == ["20", "30"]
 
@@ -57,7 +54,9 @@ def test_data_manager_complete(tmp_path):
     assert len(f2) == 4
 
     # Test filter error fallback
-    f3 = dm.get_filtered_df(filter_enabled=True, filter_column="Y", min_val_str="invalid_number")
+    f3 = dm.get_filtered_df(
+        filter_enabled=True, filter_column="Y", min_val_str="invalid_number"
+    )
     assert len(f3) == 4
 
     # Test updating from sheet

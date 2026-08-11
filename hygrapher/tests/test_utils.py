@@ -1,7 +1,5 @@
 # -*- coding: utf-8 -*-
-import pytest
 from unittest.mock import MagicMock
-import matplotlib.ticker as ticker
 from hygrapher.utils import get_font_list, apply_major_ticker, apply_minor_ticker
 
 
@@ -27,11 +25,15 @@ def test_apply_major_ticker():
 
 def test_apply_minor_ticker():
     mock_axis = MagicMock()
-    apply_minor_ticker(mock_axis, show_minor=True, interval_str="1.0", is_log_scale=False)
+    apply_minor_ticker(
+        mock_axis, show_minor=True, interval_str="1.0", is_log_scale=False
+    )
     assert mock_axis.set_minor_locator.called
 
     mock_axis.reset_mock()
-    apply_minor_ticker(mock_axis, show_minor=False, interval_str="1.0", is_log_scale=False)
+    apply_minor_ticker(
+        mock_axis, show_minor=False, interval_str="1.0", is_log_scale=False
+    )
     assert mock_axis.set_minor_locator.called
 
     mock_axis.reset_mock()

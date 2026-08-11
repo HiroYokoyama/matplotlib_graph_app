@@ -5,25 +5,37 @@ HyGrapher 3D - 3D Matplotlib Plotting Desktop Application (PyQt6 Edition)
 
 import sys
 import os
-import pathlib
 import pandas as pd
 import numpy as np
 from scipy.interpolate import griddata
 
 from PyQt6.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QSplitter, QTableWidget, QTableWidgetItem, QLabel, QPushButton,
-    QComboBox, QLineEdit, QSpinBox, QGroupBox, QListWidget, QAbstractItemView,
-    QFileDialog, QMessageBox, QScrollArea, QFormLayout
+    QApplication,
+    QMainWindow,
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QSplitter,
+    QTableWidget,
+    QTableWidgetItem,
+    QPushButton,
+    QComboBox,
+    QLineEdit,
+    QSpinBox,
+    QListWidget,
+    QAbstractItemView,
+    QFileDialog,
+    QMessageBox,
+    QFormLayout,
 )
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QAction, QDropEvent, QDragEnterEvent
 
 import matplotlib
-matplotlib.use('QtAgg')
+
+matplotlib.use("QtAgg")
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg, NavigationToolbar2QT
 from matplotlib.figure import Figure
-from mpl_toolkits.mplot3d import Axes3D
 
 from hygrapher.data_manager import DataManager
 from hygrapher.project_io import save_project_file, load_project_file
@@ -82,7 +94,9 @@ class GraphApp3D(QMainWindow):
         btn_layout.addWidget(self.open_btn)
 
         self.plot_btn = QPushButton("Plot 3D")
-        self.plot_btn.setStyleSheet("font-weight: bold; background-color: #2b5c8f; color: white;")
+        self.plot_btn.setStyleSheet(
+            "font-weight: bold; background-color: #2b5c8f; color: white;"
+        )
         self.plot_btn.clicked.connect(self.plot_graph)
         btn_layout.addWidget(self.plot_btn)
 
@@ -92,7 +106,9 @@ class GraphApp3D(QMainWindow):
         form = QFormLayout()
 
         self.plot_type_combo = QComboBox()
-        self.plot_type_combo.addItems(["surface", "wireframe", "contour3d", "scatter3d", "line3d"])
+        self.plot_type_combo.addItems(
+            ["surface", "wireframe", "contour3d", "scatter3d", "line3d"]
+        )
         form.addRow("Plot Type:", self.plot_type_combo)
 
         self.x_axis_combo = QComboBox()
@@ -124,7 +140,18 @@ class GraphApp3D(QMainWindow):
         form.addRow("Mesh Resolution:", self.resolution_spin)
 
         self.colormap_combo = QComboBox()
-        self.colormap_combo.addItems(['viridis', 'plasma', 'inferno', 'magma', 'cividis', 'coolwarm', 'jet', 'rainbow'])
+        self.colormap_combo.addItems(
+            [
+                "viridis",
+                "plasma",
+                "inferno",
+                "magma",
+                "cividis",
+                "coolwarm",
+                "jet",
+                "rainbow",
+            ]
+        )
         form.addRow("Colormap:", self.colormap_combo)
 
         left_layout.addLayout(form)
@@ -141,7 +168,7 @@ class GraphApp3D(QMainWindow):
         right_layout.setContentsMargins(0, 0, 0, 0)
 
         self.fig = Figure(figsize=(7, 5), dpi=100)
-        self.ax = self.fig.add_subplot(111, projection='3d')
+        self.ax = self.fig.add_subplot(111, projection="3d")
 
         self.canvas = FigureCanvasQTAgg(self.fig)
         self.toolbar = NavigationToolbar2QT(self.canvas, self)
@@ -161,14 +188,19 @@ class GraphApp3D(QMainWindow):
         if urls:
             file_path = urls[0].toLocalFile()
             ext = os.path.splitext(file_path)[1].lower()
-            if ext == '.pmggrp':
+            if ext == ".pmggrp":
                 self.load_project_file(file_path)
-            elif ext in ['.csv', '.tsv', '.xlsx', '.xls', '.txt', '.json']:
+            elif ext in [".csv", ".tsv", ".xlsx", ".xls", ".txt", ".json"]:
                 self.load_data(file_path=file_path)
 
     def load_data(self, file_path=None):
         if not file_path:
-            file_path, _ = QFileDialog.getOpenFileName(self, "Open Data File", "", "Supported Files (*.csv *.tsv *.xlsx *.xls *.txt *.json)")
+            file_path, _ = QFileDialog.getOpenFileName(
+                self,
+                "Open Data File",
+                "",
+                "Supported Files (*.csv *.tsv *.xlsx *.xls *.txt *.json)",
+            )
         if not file_path:
             return
 
@@ -180,7 +212,8 @@ class GraphApp3D(QMainWindow):
             QMessageBox.critical(self, "Error", f"Failed to load file:\n{e}")
 
     def populate_data_table(self):
-        if self.df is None: return
+        if self.df is None:
+            return
         self.data_table.setRowCount(len(self.df))
         self.data_table.setColumnCount(len(self.df.columns))
         self.data_table.setHorizontalHeaderLabels(list(self.df.columns))
@@ -189,10 +222,13 @@ class GraphApp3D(QMainWindow):
                 self.data_table.setItem(r, c, QTableWidgetItem(str(self.df.iat[r, c])))
 
     def update_combos(self):
-        if self.df is None: return
+        if self.df is None:
+            return
         cols = self.data_mgr.get_columns()
-        self.x_axis_combo.clear(); self.x_axis_combo.addItems(cols)
-        self.y_axis_combo.clear(); self.y_axis_combo.addItems(cols)
+        self.x_axis_combo.clear()
+        self.x_axis_combo.addItems(cols)
+        self.y_axis_combo.clear()
+        self.y_axis_combo.addItems(cols)
         self.z_listbox.clear()
         for col in cols:
             self.z_listbox.addItem(col)
@@ -202,16 +238,26 @@ class GraphApp3D(QMainWindow):
             self.z_listbox.item(2).setSelected(True)
 
     def get_data_from_table(self):
-        if self.df is None or self.data_table.rowCount() == 0: return
-        cols = [self.data_table.horizontalHeaderItem(c).text() for c in range(self.data_table.columnCount())]
-        data = [[self.data_table.item(r, c).text() if self.data_table.item(r, c) else "" for c in range(self.data_table.columnCount())] for r in range(self.data_table.rowCount())]
+        if self.df is None or self.data_table.rowCount() == 0:
+            return
+        cols = [
+            self.data_table.horizontalHeaderItem(c).text()
+            for c in range(self.data_table.columnCount())
+        ]
+        data = [
+            [
+                self.data_table.item(r, c).text() if self.data_table.item(r, c) else ""
+                for c in range(self.data_table.columnCount())
+            ]
+            for r in range(self.data_table.rowCount())
+        ]
         self.data_mgr.set_dataframe(pd.DataFrame(data, columns=cols))
         self.df = self.data_mgr.get_filtered_df()
 
     def plot_graph(self):
         try:
             self.fig.clear()
-            self.ax = self.fig.add_subplot(111, projection='3d')
+            self.ax = self.fig.add_subplot(111, projection="3d")
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to clear 3D graph:\n{e}")
             return
@@ -226,46 +272,80 @@ class GraphApp3D(QMainWindow):
         z_cols = [item.text() for item in self.z_listbox.selectedItems()]
 
         if not x_col or not y_col or not z_cols:
-            QMessageBox.warning(self, "Warning", "Select X, Y, and at least one Z column.")
+            QMessageBox.warning(
+                self, "Warning", "Select X, Y, and at least one Z column."
+            )
             return
 
         try:
             self.ax.view_init(elev=self.elev_spin.value(), azim=self.azim_spin.value())
 
-            x_num = pd.to_numeric(self.df[x_col].astype(str).str.replace(r'[^\d.-]', '', regex=True), errors='coerce')
-            y_num = pd.to_numeric(self.df[y_col].astype(str).str.replace(r'[^\d.-]', '', regex=True), errors='coerce')
+            x_num = pd.to_numeric(
+                self.df[x_col].astype(str).str.replace(r"[^\d.-]", "", regex=True),
+                errors="coerce",
+            )
+            y_num = pd.to_numeric(
+                self.df[y_col].astype(str).str.replace(r"[^\d.-]", "", regex=True),
+                errors="coerce",
+            )
             plot_type = self.plot_type_combo.currentText()
 
             for z_c in z_cols:
-                z_num = pd.to_numeric(self.df[z_c].astype(str).str.replace(r'[^\d.-]', '', regex=True), errors='coerce')
-                valid_df = pd.DataFrame({'x': x_num, 'y': y_num, 'z': z_num}).dropna()
-                if valid_df.empty: continue
+                z_num = pd.to_numeric(
+                    self.df[z_c].astype(str).str.replace(r"[^\d.-]", "", regex=True),
+                    errors="coerce",
+                )
+                valid_df = pd.DataFrame({"x": x_num, "y": y_num, "z": z_num}).dropna()
+                if valid_df.empty:
+                    continue
 
                 if plot_type in ["surface", "wireframe", "contour3d"]:
                     res = self.resolution_spin.value()
-                    xi = np.linspace(valid_df['x'].min(), valid_df['x'].max(), res)
-                    yi = np.linspace(valid_df['y'].min(), valid_df['y'].max(), res)
+                    xi = np.linspace(valid_df["x"].min(), valid_df["x"].max(), res)
+                    yi = np.linspace(valid_df["y"].min(), valid_df["y"].max(), res)
                     Xi, Yi = np.meshgrid(xi, yi)
                     try:
-                        Zi = griddata((valid_df['x'].values, valid_df['y'].values), valid_df['z'].values, (Xi, Yi), method='linear')
+                        Zi = griddata(
+                            (valid_df["x"].values, valid_df["y"].values),
+                            valid_df["z"].values,
+                            (Xi, Yi),
+                            method="linear",
+                        )
                     except Exception:
-                        Zi = griddata((valid_df['x'].values, valid_df['y'].values), valid_df['z'].values, (Xi, Yi), method='nearest')
-                    Zi = np.nan_to_num(Zi, nan=np.nanmean(valid_df['z'].values))
+                        Zi = griddata(
+                            (valid_df["x"].values, valid_df["y"].values),
+                            valid_df["z"].values,
+                            (Xi, Yi),
+                            method="nearest",
+                        )
+                    Zi = np.nan_to_num(Zi, nan=np.nanmean(valid_df["z"].values))
 
                     if plot_type == "surface":
-                        self.ax.plot_surface(Xi, Yi, Zi, cmap=self.colormap_combo.currentText(), alpha=0.8)
+                        self.ax.plot_surface(
+                            Xi,
+                            Yi,
+                            Zi,
+                            cmap=self.colormap_combo.currentText(),
+                            alpha=0.8,
+                        )
                     elif plot_type == "wireframe":
                         self.ax.plot_wireframe(Xi, Yi, Zi, rstride=5, cstride=5)
                     elif plot_type == "contour3d":
                         if np.nanmin(Zi) != np.nanmax(Zi):
-                            self.ax.contour3D(Xi, Yi, Zi, 20, cmap=self.colormap_combo.currentText())
+                            self.ax.contour3D(
+                                Xi, Yi, Zi, 20, cmap=self.colormap_combo.currentText()
+                            )
 
                 elif plot_type == "scatter3d":
-                    self.ax.scatter(valid_df['x'], valid_df['y'], valid_df['z'], label=z_c)
+                    self.ax.scatter(
+                        valid_df["x"], valid_df["y"], valid_df["z"], label=z_c
+                    )
                 elif plot_type == "line3d":
-                    self.ax.plot(valid_df['x'], valid_df['y'], valid_df['z'], label=z_c)
+                    self.ax.plot(valid_df["x"], valid_df["y"], valid_df["z"], label=z_c)
 
-            self.ax.set_xlabel(x_col); self.ax.set_ylabel(y_col); self.ax.set_zlabel(", ".join(z_cols))
+            self.ax.set_xlabel(x_col)
+            self.ax.set_ylabel(y_col)
+            self.ax.set_zlabel(", ".join(z_cols))
             if self.title_input.text():
                 self.ax.set_title(self.title_input.text())
 
@@ -274,7 +354,9 @@ class GraphApp3D(QMainWindow):
             QMessageBox.critical(self, "Error", f"Failed to plot 3D:\n{e}")
 
     def save_settings(self):
-        file_path, _ = QFileDialog.getSaveFileName(self, "Save 3D Project", "", "Matplotlib Graph Project (*.pmggrp)")
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, "Save 3D Project", "", "Matplotlib Graph Project (*.pmggrp)"
+        )
         if file_path:
             save_project_file(self, file_path, version_str=VERSION, dimension="3D")
             self.current_project_path = file_path
@@ -283,26 +365,35 @@ class GraphApp3D(QMainWindow):
         if not self.current_project_path:
             self.save_settings()
         else:
-            save_project_file(self, self.current_project_path, version_str=VERSION, dimension="3D")
+            save_project_file(
+                self, self.current_project_path, version_str=VERSION, dimension="3D"
+            )
 
     def load_project_file(self, file_path):
         load_project_file(self, file_path)
 
     def export_graph(self):
-        file_path, _ = QFileDialog.getSaveFileName(self, "Export 3D Plot Image", "", "PNG Image (*.png);;PDF Document (*.pdf)")
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, "Export 3D Plot Image", "", "PNG Image (*.png);;PDF Document (*.pdf)"
+        )
         if file_path:
-            self.fig.savefig(file_path, dpi=300, bbox_inches='tight')
+            self.fig.savefig(file_path, dpi=300, bbox_inches="tight")
             QMessageBox.information(self, "Success", f"Plot saved to {file_path}")
 
     def clear_all(self):
-        self.data_mgr.clear(); self.df = None
-        self.data_table.clear(); self.data_table.setRowCount(0); self.data_table.setColumnCount(0)
-        self.fig.clear(); self.ax = self.fig.add_subplot(111, projection='3d')
+        self.data_mgr.clear()
+        self.df = None
+        self.data_table.clear()
+        self.data_table.setRowCount(0)
+        self.data_table.setColumnCount(0)
+        self.fig.clear()
+        self.ax = self.fig.add_subplot(111, projection="3d")
         self.canvas.draw()
 
     def reset_settings(self):
         self.plot_type_combo.setCurrentIndex(0)
-        self.elev_spin.setValue(30); self.azim_spin.setValue(-60)
+        self.elev_spin.setValue(30)
+        self.azim_spin.setValue(-60)
         self.clear_all()
 
 

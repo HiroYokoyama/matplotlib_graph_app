@@ -5,31 +5,48 @@ HyGrapher - Matplotlib Plotting Desktop Application (PyQt6 Edition)
 
 import sys
 import os
-import pathlib
 import pandas as pd
 import numpy as np
 from scipy.interpolate import griddata
 
 from PyQt6.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QTabWidget, QSplitter, QTableWidget, QTableWidgetItem, QLabel,
-    QPushButton, QComboBox, QLineEdit, QCheckBox, QSpinBox, QDoubleSpinBox,
-    QGroupBox, QListWidget, QAbstractItemView, QFileDialog, QMessageBox,
-    QColorDialog, QScrollArea, QFormLayout, QHeaderView, QMenu, QMenuBar
+    QApplication,
+    QMainWindow,
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QTabWidget,
+    QSplitter,
+    QTableWidget,
+    QTableWidgetItem,
+    QLabel,
+    QPushButton,
+    QComboBox,
+    QLineEdit,
+    QCheckBox,
+    QSpinBox,
+    QDoubleSpinBox,
+    QGroupBox,
+    QListWidget,
+    QAbstractItemView,
+    QFileDialog,
+    QMessageBox,
+    QColorDialog,
+    QScrollArea,
+    QFormLayout,
 )
-from PyQt6.QtCore import Qt, QSize
-from PyQt6.QtGui import QAction, QColor, QFont, QDropEvent, QDragEnterEvent
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QAction, QDropEvent, QDragEnterEvent
 
 import matplotlib
-matplotlib.use('QtAgg')
+
+matplotlib.use("QtAgg")
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg, NavigationToolbar2QT
 from matplotlib.figure import Figure
 
 from hygrapher.data_manager import DataManager
 from hygrapher.project_io import save_project_file, load_project_file
-from hygrapher.utils import (
-    apply_major_ticker, apply_minor_ticker, get_font_list
-)
+from hygrapher.utils import get_font_list
 
 VERSION = "0.6.0"
 
@@ -115,7 +132,9 @@ class GraphApp(QMainWindow):
         top_btn_layout.addWidget(self.open_file_btn)
 
         self.plot_button = QPushButton("Plot Graph")
-        self.plot_button.setStyleSheet("font-weight: bold; background-color: #2b5c8f; color: white;")
+        self.plot_button.setStyleSheet(
+            "font-weight: bold; background-color: #2b5c8f; color: white;"
+        )
         self.plot_button.clicked.connect(self.plot_graph)
         top_btn_layout.addWidget(self.plot_button)
 
@@ -163,7 +182,7 @@ class GraphApp(QMainWindow):
         self.toolbar = NavigationToolbar2QT(self.canvas, self)
 
         right_layout.addWidget(self.toolbar)
-        
+
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
         scroll_area.setWidget(self.canvas)
@@ -180,10 +199,22 @@ class GraphApp(QMainWindow):
         pt_layout = QHBoxLayout()
         pt_layout.addWidget(QLabel("Plot Type:"))
         self.plot_type_combo = QComboBox()
-        self.plot_type_combo.addItems([
-            "line", "scatter", "bar", "step", "stem", "area",
-            "pie", "box", "violin", "heatmap", "contour", "polar"
-        ])
+        self.plot_type_combo.addItems(
+            [
+                "line",
+                "scatter",
+                "bar",
+                "step",
+                "stem",
+                "area",
+                "pie",
+                "box",
+                "violin",
+                "heatmap",
+                "contour",
+                "polar",
+            ]
+        )
         pt_layout.addWidget(self.plot_type_combo)
         layout.addLayout(pt_layout)
 
@@ -215,7 +246,7 @@ class GraphApp(QMainWindow):
         # Axis Options
         opt_group = QGroupBox("Axis Options")
         opt_layout = QVBoxLayout(opt_group)
-        
+
         self.x_log_check = QCheckBox("X-Axis Log Scale")
         self.y1_log_check = QCheckBox("Y1-Axis Log Scale")
         self.y2_log_check = QCheckBox("Y2-Axis Log Scale")
@@ -252,7 +283,7 @@ class GraphApp(QMainWindow):
 
         # Y1 and Y2 Column Pickers
         y_layout = QHBoxLayout()
-        
+
         y1_box = QGroupBox("Y1 Series (Left)")
         y1_box_layout = QVBoxLayout(y1_box)
         y1_list = QListWidget()
@@ -280,7 +311,7 @@ class GraphApp(QMainWindow):
             "tab_widget": tab_widget,
             "x_combo": x_combo,
             "y1_listbox": y1_list,
-            "y2_listbox": y2_list
+            "y2_listbox": y2_list,
         }
         self.x_tab_widgets.append(tab_info)
 
@@ -295,7 +326,9 @@ class GraphApp(QMainWindow):
         idx = self.x_notebook.indexOf(tab_widget)
         if idx != -1:
             self.x_notebook.removeTab(idx)
-            self.x_tab_widgets = [t for t in self.x_tab_widgets if t["tab_widget"] != tab_widget]
+            self.x_tab_widgets = [
+                t for t in self.x_tab_widgets if t["tab_widget"] != tab_widget
+            ]
 
     def create_style_settings_tab(self):
         tab = QWidget()
@@ -304,7 +337,9 @@ class GraphApp(QMainWindow):
         target_layout = QHBoxLayout()
         target_layout.addWidget(QLabel("Select Series:"))
         self.combined_style_target_combo = QComboBox()
-        self.combined_style_target_combo.currentIndexChanged.connect(self.on_combined_series_select)
+        self.combined_style_target_combo.currentIndexChanged.connect(
+            self.on_combined_series_select
+        )
         target_layout.addWidget(self.combined_style_target_combo)
         layout.addLayout(target_layout)
 
@@ -324,7 +359,7 @@ class GraphApp(QMainWindow):
 
         # Line style
         self.style_linestyle_combo = QComboBox()
-        self.style_linestyle_combo.addItems(['-', '--', '-.', ':', 'None'])
+        self.style_linestyle_combo.addItems(["-", "--", "-.", ":", "None"])
         form.addRow("Line Style:", self.style_linestyle_combo)
 
         # Line width
@@ -336,7 +371,9 @@ class GraphApp(QMainWindow):
 
         # Marker style
         self.style_marker_combo = QComboBox()
-        self.style_marker_combo.addItems(['None', 'o', 's', '^', 'v', 'D', 'x', '+', '*'])
+        self.style_marker_combo.addItems(
+            ["None", "o", "s", "^", "v", "D", "x", "+", "*"]
+        )
         form.addRow("Marker:", self.style_marker_combo)
 
         # Marker size
@@ -462,10 +499,21 @@ class GraphApp(QMainWindow):
         layout.addRow(self.legend_show_check)
 
         self.legend_loc_combo = QComboBox()
-        self.legend_loc_combo.addItems([
-            'best', 'upper right', 'upper left', 'lower left', 'lower right',
-            'right', 'center left', 'center right', 'lower center', 'upper center', 'center'
-        ])
+        self.legend_loc_combo.addItems(
+            [
+                "best",
+                "upper right",
+                "upper left",
+                "lower left",
+                "lower right",
+                "right",
+                "center left",
+                "center right",
+                "lower center",
+                "upper center",
+                "center",
+            ]
+        )
         layout.addRow("Legend Position:", self.legend_loc_combo)
 
         self.settings_notebook.addTab(tab, "Legend")
@@ -501,7 +549,20 @@ class GraphApp(QMainWindow):
 
         # Colormap & Export DPI
         self.colormap_combo = QComboBox()
-        self.colormap_combo.addItems(['viridis', 'plasma', 'inferno', 'magma', 'cividis', 'coolwarm', 'jet', 'rainbow', 'turbo', 'gray'])
+        self.colormap_combo.addItems(
+            [
+                "viridis",
+                "plasma",
+                "inferno",
+                "magma",
+                "cividis",
+                "coolwarm",
+                "jet",
+                "rainbow",
+                "turbo",
+                "gray",
+            ]
+        )
         layout.addRow("Colormap:", self.colormap_combo)
 
         self.export_dpi_spin = QSpinBox()
@@ -521,17 +582,19 @@ class GraphApp(QMainWindow):
         if urls:
             file_path = urls[0].toLocalFile()
             ext = os.path.splitext(file_path)[1].lower()
-            if ext == '.pmggrp':
+            if ext == ".pmggrp":
                 self.load_project_file(file_path)
-            elif ext in ['.csv', '.tsv', '.xlsx', '.xls', '.txt', '.json']:
+            elif ext in [".csv", ".tsv", ".xlsx", ".xls", ".txt", ".json"]:
                 self.load_data(file_path=file_path)
 
     # ── File & Data Management ───────────────────────────────────────────────
     def load_data(self, file_path=None):
         if not file_path:
             file_path, _ = QFileDialog.getOpenFileName(
-                self, "Open Data File", "",
-                "Supported Files (*.csv *.tsv *.xlsx *.xls *.txt *.json);;CSV Files (*.csv);;All Files (*)"
+                self,
+                "Open Data File",
+                "",
+                "Supported Files (*.csv *.tsv *.xlsx *.xls *.txt *.json);;CSV Files (*.csv);;All Files (*)",
             )
         if not file_path:
             return
@@ -562,7 +625,10 @@ class GraphApp(QMainWindow):
         if self.df is None or self.data_table.rowCount() == 0:
             return
 
-        cols = [self.data_table.horizontalHeaderItem(c).text() for c in range(self.data_table.columnCount())]
+        cols = [
+            self.data_table.horizontalHeaderItem(c).text()
+            for c in range(self.data_table.columnCount())
+        ]
         data = []
         for r in range(self.data_table.rowCount()):
             row_vals = []
@@ -599,7 +665,7 @@ class GraphApp(QMainWindow):
                 init_tab["y1_listbox"].item(0).setSelected(True)
 
         self.errorbar_column_combo.clear()
-        self.errorbar_column_combo.addItems([''] + columns)
+        self.errorbar_column_combo.addItems([""] + columns)
         self.filter_column_combo.clear()
         self.filter_column_combo.addItems(columns)
 
@@ -611,7 +677,9 @@ class GraphApp(QMainWindow):
             y1_cols = [item.text() for item in info["y1_listbox"].selectedItems()]
             y2_cols = [item.text() for item in info["y2_listbox"].selectedItems()]
             if x_col:
-                tabs_info.append({"x_axis": x_col, "y1_cols": y1_cols, "y2_cols": y2_cols})
+                tabs_info.append(
+                    {"x_axis": x_col, "y1_cols": y1_cols, "y2_cols": y2_cols}
+                )
         return tabs_info
 
     # ── Style Editor Interactivity ───────────────────────────────────────────
@@ -619,7 +687,7 @@ class GraphApp(QMainWindow):
         self.combined_style_target_combo.clear()
         tabs = self.get_x_tabs_data()
         for idx, tab in enumerate(tabs):
-            prefix = f"T{idx+1}-" if len(tabs) > 1 else ""
+            prefix = f"T{idx + 1}-" if len(tabs) > 1 else ""
             for col in tab["y1_cols"]:
                 self.combined_style_target_combo.addItem(f"({prefix}Y1) {col}")
             for col in tab["y2_cols"]:
@@ -636,20 +704,26 @@ class GraphApp(QMainWindow):
             style = self.y2_series_styles[target]
         else:
             style = {
-                'color': 'Auto', 'linestyle': '-', 'linewidth': 1.5,
-                'marker': 'None', 'markersize': 6.0, 'alpha': 1.0,
-                'label': target.split(') ', 1)[-1] if ') ' in target else target
+                "color": "Auto",
+                "linestyle": "-",
+                "linewidth": 1.5,
+                "marker": "None",
+                "markersize": 6.0,
+                "alpha": 1.0,
+                "label": target.split(") ", 1)[-1] if ") " in target else target,
             }
 
-        self.style_color_input.setText(style.get('color', 'Auto'))
-        idx_line = self.style_linestyle_combo.findText(style.get('linestyle', '-'))
-        if idx_line >= 0: self.style_linestyle_combo.setCurrentIndex(idx_line)
-        self.style_linewidth_spin.setValue(float(style.get('linewidth', 1.5)))
-        idx_marker = self.style_marker_combo.findText(style.get('marker', 'None'))
-        if idx_marker >= 0: self.style_marker_combo.setCurrentIndex(idx_marker)
-        self.style_markersize_spin.setValue(float(style.get('markersize', 6.0)))
-        self.style_alpha_spin.setValue(float(style.get('alpha', 1.0)))
-        self.style_label_input.setText(style.get('label', ''))
+        self.style_color_input.setText(style.get("color", "Auto"))
+        idx_line = self.style_linestyle_combo.findText(style.get("linestyle", "-"))
+        if idx_line >= 0:
+            self.style_linestyle_combo.setCurrentIndex(idx_line)
+        self.style_linewidth_spin.setValue(float(style.get("linewidth", 1.5)))
+        idx_marker = self.style_marker_combo.findText(style.get("marker", "None"))
+        if idx_marker >= 0:
+            self.style_marker_combo.setCurrentIndex(idx_marker)
+        self.style_markersize_spin.setValue(float(style.get("markersize", 6.0)))
+        self.style_alpha_spin.setValue(float(style.get("alpha", 1.0)))
+        self.style_label_input.setText(style.get("label", ""))
 
     def on_style_editor_color_pick(self):
         color = QColorDialog.getColor()
@@ -667,13 +741,13 @@ class GraphApp(QMainWindow):
             return
 
         style = {
-            'color': self.style_color_input.text(),
-            'linestyle': self.style_linestyle_combo.currentText(),
-            'linewidth': self.style_linewidth_spin.value(),
-            'marker': self.style_marker_combo.currentText(),
-            'markersize': self.style_markersize_spin.value(),
-            'alpha': self.style_alpha_spin.value(),
-            'label': self.style_label_input.text()
+            "color": self.style_color_input.text(),
+            "linestyle": self.style_linestyle_combo.currentText(),
+            "linewidth": self.style_linewidth_spin.value(),
+            "marker": self.style_marker_combo.currentText(),
+            "markersize": self.style_markersize_spin.value(),
+            "alpha": self.style_alpha_spin.value(),
+            "label": self.style_label_input.text(),
         }
 
         if "Y1" in target:
@@ -707,98 +781,185 @@ class GraphApp(QMainWindow):
             filter_enabled=self.data_filter_check.isChecked(),
             filter_column=self.filter_column_combo.currentText(),
             min_val_str=self.filter_min_input.text(),
-            max_val_str=self.filter_max_input.text()
+            max_val_str=self.filter_max_input.text(),
         )
 
         x_tabs_info = self.get_x_tabs_data()
         plot_type = self.plot_type_combo.currentText()
 
         def plot_series(ax, x_col, y_col, is_twin_ax=False, label_prefix=""):
-            series_key = f"({label_prefix}Y2) {y_col}" if is_twin_ax else f"({label_prefix}Y1) {y_col}"
-            style_dict = self.y2_series_styles.get(series_key, {}) if is_twin_ax else self.y1_series_styles.get(series_key, {})
+            series_key = (
+                f"({label_prefix}Y2) {y_col}"
+                if is_twin_ax
+                else f"({label_prefix}Y1) {y_col}"
+            )
+            style_dict = (
+                self.y2_series_styles.get(series_key, {})
+                if is_twin_ax
+                else self.y1_series_styles.get(series_key, {})
+            )
 
-            color = style_dict.get('color', 'Auto')
-            color = None if color in ['Auto', 'None', ''] else color
-            linestyle = style_dict.get('linestyle', '-')
-            linewidth = float(style_dict.get('linewidth', 1.5))
-            markerstyle = style_dict.get('marker', 'None')
-            markersize = float(style_dict.get('markersize', 6.0))
-            alpha = float(style_dict.get('alpha', 1.0))
-            display_label = style_dict.get('label', f"{y_col} (Y2)" if is_twin_ax else y_col)
+            color = style_dict.get("color", "Auto")
+            color = None if color in ["Auto", "None", ""] else color
+            linestyle = style_dict.get("linestyle", "-")
+            linewidth = float(style_dict.get("linewidth", 1.5))
+            markerstyle = style_dict.get("marker", "None")
+            markersize = float(style_dict.get("markersize", 6.0))
+            alpha = float(style_dict.get("alpha", 1.0))
+            display_label = style_dict.get(
+                "label", f"{y_col} (Y2)" if is_twin_ax else y_col
+            )
 
             x_data_raw = plot_df[x_col]
             y_data_raw = plot_df[y_col]
-            y_cleaned = y_data_raw.astype(str).str.replace(r'[^\d.-]', '', regex=True)
-            y_data_numeric = pd.to_numeric(y_cleaned, errors='coerce')
+            y_cleaned = y_data_raw.astype(str).str.replace(r"[^\d.-]", "", regex=True)
+            y_data_numeric = pd.to_numeric(y_cleaned, errors="coerce")
 
             if plot_type == "bar":
                 x_data = x_data_raw.astype(str)
                 valid_mask = ~y_data_numeric.isnull()
-                ax.bar(x_data[valid_mask], y_data_numeric[valid_mask], alpha=alpha, label=display_label, color=color)
+                ax.bar(
+                    x_data[valid_mask],
+                    y_data_numeric[valid_mask],
+                    alpha=alpha,
+                    label=display_label,
+                    color=color,
+                )
             else:
-                x_cleaned = x_data_raw.astype(str).str.replace(r'[^\d.-]', '', regex=True)
-                x_numeric = pd.to_numeric(x_cleaned, errors='coerce')
-                valid_df = pd.DataFrame({'x': x_numeric, 'y': y_data_numeric}).dropna()
+                x_cleaned = x_data_raw.astype(str).str.replace(
+                    r"[^\d.-]", "", regex=True
+                )
+                x_numeric = pd.to_numeric(x_cleaned, errors="coerce")
+                valid_df = pd.DataFrame({"x": x_numeric, "y": y_data_numeric}).dropna()
                 if valid_df.empty:
                     return
 
-                plot_x, plot_y = valid_df['x'], valid_df['y']
+                plot_x, plot_y = valid_df["x"], valid_df["y"]
 
-                if plot_type == "line" and self.enable_smoothing_check.isChecked() and len(plot_y) >= self.smoothing_window_spin.value():
-                    plot_y = plot_y.rolling(window=self.smoothing_window_spin.value(), center=True).mean().fillna(plot_y)
+                if (
+                    plot_type == "line"
+                    and self.enable_smoothing_check.isChecked()
+                    and len(plot_y) >= self.smoothing_window_spin.value()
+                ):
+                    plot_y = (
+                        plot_y.rolling(
+                            window=self.smoothing_window_spin.value(), center=True
+                        )
+                        .mean()
+                        .fillna(plot_y)
+                    )
 
                 errorbar_vals = None
-                if (self.enable_errorbar_check.isChecked() and not is_twin_ax
-                        and self.errorbar_column_combo.currentText() in plot_df.columns):
-                    err_cleaned = plot_df[self.errorbar_column_combo.currentText()].astype(str).str.replace(r'[^\d.-]', '', regex=True)
-                    err_numeric = pd.to_numeric(err_cleaned, errors='coerce')
+                if (
+                    self.enable_errorbar_check.isChecked()
+                    and not is_twin_ax
+                    and self.errorbar_column_combo.currentText() in plot_df.columns
+                ):
+                    err_cleaned = (
+                        plot_df[self.errorbar_column_combo.currentText()]
+                        .astype(str)
+                        .str.replace(r"[^\d.-]", "", regex=True)
+                    )
+                    err_numeric = pd.to_numeric(err_cleaned, errors="coerce")
                     errorbar_vals = err_numeric.reindex(valid_df.index).values
 
                 if plot_type == "line":
-                    line_kw = {'linestyle': linestyle, 'linewidth': linewidth, 'marker': markerstyle, 'markersize': markersize, 'alpha': alpha, 'label': display_label}
-                    if color: line_kw['color'] = color
+                    line_kw = {
+                        "linestyle": linestyle,
+                        "linewidth": linewidth,
+                        "marker": markerstyle,
+                        "markersize": markersize,
+                        "alpha": alpha,
+                        "label": display_label,
+                    }
+                    if color:
+                        line_kw["color"] = color
                     if errorbar_vals is not None:
-                        line_kw['yerr'] = errorbar_vals; line_kw['capsize'] = 3
+                        line_kw["yerr"] = errorbar_vals
+                        line_kw["capsize"] = 3
                         ax.errorbar(plot_x, plot_y, **line_kw)
                     else:
                         ax.plot(plot_x, plot_y, **line_kw)
                 elif plot_type == "scatter":
-                    scatter_kw = {'alpha': alpha, 'label': display_label, 's': markersize**2}
-                    if color: scatter_kw['color'] = color
-                    if markerstyle != 'None': scatter_kw['marker'] = markerstyle
+                    scatter_kw = {
+                        "alpha": alpha,
+                        "label": display_label,
+                        "s": markersize**2,
+                    }
+                    if color:
+                        scatter_kw["color"] = color
+                    if markerstyle != "None":
+                        scatter_kw["marker"] = markerstyle
                     if errorbar_vals is not None:
-                        scatter_kw['yerr'] = errorbar_vals; scatter_kw['capsize'] = 3
-                        fmt = markerstyle if markerstyle != 'None' else 'o'
-                        ax.errorbar(plot_x, plot_y, fmt=fmt, **{k: v for k, v in scatter_kw.items() if k not in ['marker', 's']})
+                        scatter_kw["yerr"] = errorbar_vals
+                        scatter_kw["capsize"] = 3
+                        fmt = markerstyle if markerstyle != "None" else "o"
+                        ax.errorbar(
+                            plot_x,
+                            plot_y,
+                            fmt=fmt,
+                            **{
+                                k: v
+                                for k, v in scatter_kw.items()
+                                if k not in ["marker", "s"]
+                            },
+                        )
                     else:
                         ax.scatter(plot_x, plot_y, **scatter_kw)
                 elif plot_type == "step":
-                    step_kw = {'linestyle': linestyle, 'linewidth': linewidth, 'alpha': alpha, 'label': display_label}
-                    if color: step_kw['color'] = color
-                    ax.step(plot_x, plot_y, where='mid', **step_kw)
+                    step_kw = {
+                        "linestyle": linestyle,
+                        "linewidth": linewidth,
+                        "alpha": alpha,
+                        "label": display_label,
+                    }
+                    if color:
+                        step_kw["color"] = color
+                    ax.step(plot_x, plot_y, where="mid", **step_kw)
                 elif plot_type == "area":
-                    area_kw = {'linestyle': linestyle, 'linewidth': linewidth, 'alpha': alpha, 'label': display_label}
-                    if color: area_kw['color'] = color
+                    area_kw = {
+                        "linestyle": linestyle,
+                        "linewidth": linewidth,
+                        "alpha": alpha,
+                        "label": display_label,
+                    }
+                    if color:
+                        area_kw["color"] = color
                     ax.fill_between(plot_x, 0, plot_y, **area_kw)
                 elif plot_type == "stem":
-                    stem_kw = {'label': display_label}
-                    if color: stem_kw['linefmt'] = color; stem_kw['markerfmt'] = color + 'o'
+                    stem_kw = {"label": display_label}
+                    if color:
+                        stem_kw["linefmt"] = color
+                        stem_kw["markerfmt"] = color + "o"
                     ml, sl, _ = ax.stem(plot_x, plot_y, **stem_kw)
-                    ml.set_alpha(alpha); sl.set_alpha(alpha)
+                    ml.set_alpha(alpha)
+                    sl.set_alpha(alpha)
 
                 if self.enable_annotation_check.isChecked() and not is_twin_ax:
                     for i, (xi, yi) in enumerate(zip(plot_x, plot_y)):
                         if i % max(1, len(plot_x) // 10) == 0:
-                            ax.annotate(f'{yi:.2f}', (xi, yi), textcoords='offset points', xytext=(0, 5), ha='center', fontsize=8)
+                            ax.annotate(
+                                f"{yi:.2f}",
+                                (xi, yi),
+                                textcoords="offset points",
+                                xytext=(0, 5),
+                                ha="center",
+                                fontsize=8,
+                            )
 
         # Handle Special Plot Types (Pie, Box, Violin, Heatmap, Contour, Polar)
         _first_tab = x_tabs_info[0] if x_tabs_info else {}
         _x_col_0 = _first_tab.get("x_axis", "")
         _y1_cols_0 = _first_tab.get("y1_cols", [])
-        _x0_raw = plot_df[_x_col_0] if _x_col_0 and _x_col_0 in plot_df.columns else None
+        _x0_raw = (
+            plot_df[_x_col_0] if _x_col_0 and _x_col_0 in plot_df.columns else None
+        )
 
         def _to_numeric_series(col):
-            return pd.to_numeric(plot_df[col].astype(str).str.replace(r'[^\d.-]', '', regex=True), errors='coerce')
+            return pd.to_numeric(
+                plot_df[col].astype(str).str.replace(r"[^\d.-]", "", regex=True),
+                errors="coerce",
+            )
 
         def _finish_special():
             self.fig.tight_layout()
@@ -806,72 +967,133 @@ class GraphApp(QMainWindow):
 
         if plot_type == "pie":
             if not _y1_cols_0:
-                QMessageBox.warning(self, "Warning", "Pie chart requires at least one Y column.")
+                QMessageBox.warning(
+                    self, "Warning", "Pie chart requires at least one Y column."
+                )
                 return
-            valid = pd.DataFrame({'x': _x0_raw, 'y': _to_numeric_series(_y1_cols_0[0])}).dropna()
-            self.ax.pie(valid['y'], labels=valid['x'].astype(str), autopct='%1.1f%%', startangle=90)
-            self.ax.axis('equal')
-            if self.title_input.text(): self.ax.set_title(self.title_input.text())
+            valid = pd.DataFrame(
+                {"x": _x0_raw, "y": _to_numeric_series(_y1_cols_0[0])}
+            ).dropna()
+            self.ax.pie(
+                valid["y"],
+                labels=valid["x"].astype(str),
+                autopct="%1.1f%%",
+                startangle=90,
+            )
+            self.ax.axis("equal")
+            if self.title_input.text():
+                self.ax.set_title(self.title_input.text())
             _finish_special()
             return
 
         elif plot_type == "box":
-            box_data = [_to_numeric_series(yc).dropna() for yc in _y1_cols_0 if len(_to_numeric_series(yc).dropna()) > 0]
+            box_data = [
+                _to_numeric_series(yc).dropna()
+                for yc in _y1_cols_0
+                if len(_to_numeric_series(yc).dropna()) > 0
+            ]
             if box_data:
                 self.ax.boxplot(box_data, labels=_y1_cols_0)
-                if self.title_input.text(): self.ax.set_title(self.title_input.text())
-                if self.grid_check.isChecked(): self.ax.grid(True)
+                if self.title_input.text():
+                    self.ax.set_title(self.title_input.text())
+                if self.grid_check.isChecked():
+                    self.ax.grid(True)
             _finish_special()
             return
 
         elif plot_type == "violin":
-            v_data = [_to_numeric_series(yc).dropna() for yc in _y1_cols_0 if len(_to_numeric_series(yc).dropna()) > 0]
+            v_data = [
+                _to_numeric_series(yc).dropna()
+                for yc in _y1_cols_0
+                if len(_to_numeric_series(yc).dropna()) > 0
+            ]
             if v_data:
                 self.ax.violinplot(v_data, showmeans=True, showmedians=True)
                 self.ax.set_xticks(range(1, len(_y1_cols_0) + 1))
                 self.ax.set_xticklabels(_y1_cols_0)
-                if self.title_input.text(): self.ax.set_title(self.title_input.text())
-                if self.grid_check.isChecked(): self.ax.grid(True)
+                if self.title_input.text():
+                    self.ax.set_title(self.title_input.text())
+                if self.grid_check.isChecked():
+                    self.ax.grid(True)
             _finish_special()
             return
 
         elif plot_type == "heatmap":
-            if not _y1_cols_0: return
+            if not _y1_cols_0:
+                return
             hmap = [_to_numeric_series(yc).fillna(0).values for yc in _y1_cols_0]
-            im = self.ax.imshow(np.array(hmap), aspect='auto', cmap=self.colormap_combo.currentText())
+            im = self.ax.imshow(
+                np.array(hmap), aspect="auto", cmap=self.colormap_combo.currentText()
+            )
             self.ax.set_yticks(range(len(_y1_cols_0)))
             self.ax.set_yticklabels(_y1_cols_0)
             self.fig.colorbar(im, ax=self.ax)
         elif plot_type == "contour":
             if len(_y1_cols_0) < 2 or _x0_raw is None:
-                QMessageBox.warning(self, "Warning", "Contour plot requires at least 2 Y columns (Y-coord, Z-value).")
+                QMessageBox.warning(
+                    self,
+                    "Warning",
+                    "Contour plot requires at least 2 Y columns (Y-coord, Z-value).",
+                )
                 return
-            x_num = pd.to_numeric(_x0_raw.astype(str).str.replace(r'[^\d.-]', '', regex=True), errors='coerce')
+            x_num = pd.to_numeric(
+                _x0_raw.astype(str).str.replace(r"[^\d.-]", "", regex=True),
+                errors="coerce",
+            )
             y_num = _to_numeric_series(_y1_cols_0[0])
             z_num = _to_numeric_series(_y1_cols_0[1])
-            valid = pd.DataFrame({'x': x_num, 'y': y_num, 'z': z_num}).dropna()
-            if len(valid) >= 4 and valid['x'].nunique() > 1 and valid['y'].nunique() > 1:
-                xi = np.linspace(valid['x'].min(), valid['x'].max(), 50)
-                yi = np.linspace(valid['y'].min(), valid['y'].max(), 50)
+            valid = pd.DataFrame({"x": x_num, "y": y_num, "z": z_num}).dropna()
+            if (
+                len(valid) >= 4
+                and valid["x"].nunique() > 1
+                and valid["y"].nunique() > 1
+            ):
+                xi = np.linspace(valid["x"].min(), valid["x"].max(), 50)
+                yi = np.linspace(valid["y"].min(), valid["y"].max(), 50)
                 Xi, Yi = np.meshgrid(xi, yi)
                 try:
-                    Zi = griddata((valid['x'].values, valid['y'].values), valid['z'].values, (Xi, Yi), method='linear')
+                    Zi = griddata(
+                        (valid["x"].values, valid["y"].values),
+                        valid["z"].values,
+                        (Xi, Yi),
+                        method="linear",
+                    )
                 except Exception:
-                    Zi = griddata((valid['x'].values, valid['y'].values), valid['z'].values, (Xi, Yi), method='nearest')
-                cf = self.ax.contourf(Xi, Yi, Zi, levels=15, cmap=self.colormap_combo.currentText())
+                    Zi = griddata(
+                        (valid["x"].values, valid["y"].values),
+                        valid["z"].values,
+                        (Xi, Yi),
+                        method="nearest",
+                    )
+                cf = self.ax.contourf(
+                    Xi, Yi, Zi, levels=15, cmap=self.colormap_combo.currentText()
+                )
                 self.fig.colorbar(cf, ax=self.ax)
             _finish_special()
             return
 
         elif plot_type == "polar":
             self.fig.clear()
-            self.ax = self.fig.add_subplot(111, projection='polar')
-            x_num = pd.to_numeric(_x0_raw.astype(str).str.replace(r'[^\d.-]', '', regex=True), errors='coerce') if _x0_raw is not None else pd.Series()
+            self.ax = self.fig.add_subplot(111, projection="polar")
+            x_num = (
+                pd.to_numeric(
+                    _x0_raw.astype(str).str.replace(r"[^\d.-]", "", regex=True),
+                    errors="coerce",
+                )
+                if _x0_raw is not None
+                else pd.Series()
+            )
             for yc in _y1_cols_0:
-                valid = pd.DataFrame({'x': x_num, 'y': _to_numeric_series(yc)}).dropna()
+                valid = pd.DataFrame({"x": x_num, "y": _to_numeric_series(yc)}).dropna()
                 if not valid.empty:
-                    self.ax.plot(np.radians(valid['x'].values), valid['y'].values, label=yc, marker='o')
-            if self.legend_show_check.isChecked(): self.ax.legend()
+                    self.ax.plot(
+                        np.radians(valid["x"].values),
+                        valid["y"].values,
+                        label=yc,
+                        marker="o",
+                    )
+            if self.legend_show_check.isChecked():
+                self.ax.legend()
             _finish_special()
             return
 
@@ -884,35 +1106,56 @@ class GraphApp(QMainWindow):
             x_col = tab_data["x_axis"]
             if not x_col or x_col not in plot_df.columns:
                 continue
-            prefix = f"T{tab_idx+1}-" if len(x_tabs_info) > 1 else ""
+            prefix = f"T{tab_idx + 1}-" if len(x_tabs_info) > 1 else ""
 
             for y_col in tab_data["y1_cols"]:
                 if y_col in plot_df.columns:
-                    plot_series(self.ax, x_col, y_col, is_twin_ax=False, label_prefix=prefix)
+                    plot_series(
+                        self.ax, x_col, y_col, is_twin_ax=False, label_prefix=prefix
+                    )
 
             target_ax = self.ax2 if self.ax2 else self.ax
             for y_col in tab_data["y2_cols"]:
                 if y_col in plot_df.columns:
-                    plot_series(target_ax, x_col, y_col, is_twin_ax=True, label_prefix=prefix)
+                    plot_series(
+                        target_ax, x_col, y_col, is_twin_ax=True, label_prefix=prefix
+                    )
 
         # Titles and Formatting
         font_family = self.font_family_combo.currentText()
         first_x_col = x_tabs_info[0]["x_axis"] if x_tabs_info else ""
         y1_names = [c for tab in x_tabs_info for c in tab["y1_cols"]]
-        y2_names = [c for tab in x_tabs_info for c in tab["y2_cols"]]
 
-        self.ax.set_title(self.title_input.text(), fontsize=self.title_fontsize_spin.value(), fontfamily=font_family)
-        self.ax.set_xlabel(self.xlabel_input.text() if self.xlabel_input.text() else first_x_col, fontsize=self.xlabel_fontsize_spin.value(), fontfamily=font_family)
-        self.ax.set_ylabel(self.ylabel_input.text() if self.ylabel_input.text() else ", ".join(y1_names), fontsize=self.ylabel_fontsize_spin.value(), fontfamily=font_family)
+        self.ax.set_title(
+            self.title_input.text(),
+            fontsize=self.title_fontsize_spin.value(),
+            fontfamily=font_family,
+        )
+        self.ax.set_xlabel(
+            self.xlabel_input.text() if self.xlabel_input.text() else first_x_col,
+            fontsize=self.xlabel_fontsize_spin.value(),
+            fontfamily=font_family,
+        )
+        self.ax.set_ylabel(
+            self.ylabel_input.text()
+            if self.ylabel_input.text()
+            else ", ".join(y1_names),
+            fontsize=self.ylabel_fontsize_spin.value(),
+            fontfamily=font_family,
+        )
 
-        self.set_axis_limits(self.ax, 'x', self.xlim_min_input.text(), self.xlim_max_input.text())
-        self.set_axis_limits(self.ax, 'y', self.ylim_min_input.text(), self.ylim_max_input.text())
+        self.set_axis_limits(
+            self.ax, "x", self.xlim_min_input.text(), self.xlim_max_input.text()
+        )
+        self.set_axis_limits(
+            self.ax, "y", self.ylim_min_input.text(), self.ylim_max_input.text()
+        )
 
         if self.grid_check.isChecked():
             self.ax.grid(True)
 
         if self.rotate_labels_check.isChecked():
-            self.ax.tick_params(axis='x', rotation=self.rotation_angle_spin.value())
+            self.ax.tick_params(axis="x", rotation=self.rotation_angle_spin.value())
 
         if self.legend_show_check.isChecked():
             h1, l1 = self.ax.get_legend_handles_labels()
@@ -926,20 +1169,28 @@ class GraphApp(QMainWindow):
         try:
             val_min = float(min_val_str) if min_val_str else None
             val_max = float(max_val_str) if max_val_str else None
-            if axis == 'x':
-                if val_min is not None and val_max is not None: ax.set_xlim(val_min, val_max)
-                elif val_min is not None: ax.set_xlim(left=val_min)
-                elif val_max is not None: ax.set_xlim(right=val_max)
-            elif axis == 'y':
-                if val_min is not None and val_max is not None: ax.set_ylim(val_min, val_max)
-                elif val_min is not None: ax.set_ylim(bottom=val_min)
-                elif val_max is not None: ax.set_ylim(top=val_max)
+            if axis == "x":
+                if val_min is not None and val_max is not None:
+                    ax.set_xlim(val_min, val_max)
+                elif val_min is not None:
+                    ax.set_xlim(left=val_min)
+                elif val_max is not None:
+                    ax.set_xlim(right=val_max)
+            elif axis == "y":
+                if val_min is not None and val_max is not None:
+                    ax.set_ylim(val_min, val_max)
+                elif val_min is not None:
+                    ax.set_ylim(bottom=val_min)
+                elif val_max is not None:
+                    ax.set_ylim(top=val_max)
         except ValueError:
             pass
 
     # ── Import / Export & Project Files ──────────────────────────────────────
     def save_settings(self):
-        file_path, _ = QFileDialog.getSaveFileName(self, "Save Project", "", "Matplotlib Graph Project (*.pmggrp)")
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, "Save Project", "", "Matplotlib Graph Project (*.pmggrp)"
+        )
         if file_path:
             save_project_file(self, file_path, version_str=VERSION, dimension="2D")
             self.current_project_path = file_path
@@ -948,10 +1199,14 @@ class GraphApp(QMainWindow):
         if not self.current_project_path:
             self.save_settings()
         else:
-            save_project_file(self, self.current_project_path, version_str=VERSION, dimension="2D")
+            save_project_file(
+                self, self.current_project_path, version_str=VERSION, dimension="2D"
+            )
 
     def load_settings(self):
-        file_path, _ = QFileDialog.getOpenFileName(self, "Open Project", "", "Matplotlib Graph Project (*.pmggrp)")
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "Open Project", "", "Matplotlib Graph Project (*.pmggrp)"
+        )
         if file_path:
             self.load_project_file(file_path)
 
@@ -960,23 +1215,32 @@ class GraphApp(QMainWindow):
         self.current_project_path = file_path
 
     def export_graph(self):
-        file_path, _ = QFileDialog.getSaveFileName(self, "Export Plot Image", "", "PNG Image (*.png);;PDF Document (*.pdf);;SVG Image (*.svg)")
+        file_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Export Plot Image",
+            "",
+            "PNG Image (*.png);;PDF Document (*.pdf);;SVG Image (*.svg)",
+        )
         if file_path:
-            self.fig.savefig(file_path, dpi=self.export_dpi_spin.value(), bbox_inches='tight')
+            self.fig.savefig(
+                file_path, dpi=self.export_dpi_spin.value(), bbox_inches="tight"
+            )
             QMessageBox.information(self, "Success", f"Plot saved to {file_path}")
 
     def export_filtered_data(self):
         if self.df is None:
             return
-        file_path, _ = QFileDialog.getSaveFileName(self, "Export Data", "", "CSV File (*.csv);;Excel File (*.xlsx)")
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, "Export Data", "", "CSV File (*.csv);;Excel File (*.xlsx)"
+        )
         if file_path:
             df_export = self.data_mgr.get_filtered_df(
                 filter_enabled=self.data_filter_check.isChecked(),
                 filter_column=self.filter_column_combo.currentText(),
                 min_val_str=self.filter_min_input.text(),
-                max_val_str=self.filter_max_input.text()
+                max_val_str=self.filter_max_input.text(),
             )
-            if file_path.endswith('.xlsx'):
+            if file_path.endswith(".xlsx"):
                 df_export.to_excel(file_path, index=False)
             else:
                 df_export.to_csv(file_path, index=False)
@@ -1004,13 +1268,18 @@ class GraphApp(QMainWindow):
     def open_in_3d_mode(self):
         try:
             from hygrapher.main_3d import GraphApp3D
+
             self.win_3d = GraphApp3D()
             self.win_3d.show()
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to open 3D Mode:\n{e}")
 
     def show_about(self):
-        QMessageBox.about(self, "About HyGrapher", f"HyGrapher v{VERSION}\nA cross-platform Matplotlib GUI application built with PyQt6.")
+        QMessageBox.about(
+            self,
+            "About HyGrapher",
+            f"HyGrapher v{VERSION}\nA cross-platform Matplotlib GUI application built with PyQt6.",
+        )
 
 
 def main():

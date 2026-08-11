@@ -8,7 +8,6 @@ and provides clean interfaces for sheet widgets and filtering.
 """
 
 import pandas as pd
-import numpy as np
 
 
 class DataManager:
@@ -44,7 +43,7 @@ class DataManager:
         """
         Load data from a CSV or Excel file into a string DataFrame.
         """
-        if file_path.endswith('.csv'):
+        if file_path.endswith(".csv"):
             df = pd.read_csv(file_path, dtype=str)
         else:
             df = pd.read_excel(file_path, dtype=str)
@@ -59,7 +58,9 @@ class DataManager:
             return self._raw_df.columns.tolist()
         return []
 
-    def get_filtered_df(self, filter_enabled=False, filter_column="", min_val_str="", max_val_str=""):
+    def get_filtered_df(
+        self, filter_enabled=False, filter_column="", min_val_str="", max_val_str=""
+    ):
         """
         Return a copy of the dataframe, optionally filtered by range, without mutating `_raw_df`.
         """
@@ -67,15 +68,18 @@ class DataManager:
             return None
 
         df_copy = self._raw_df.copy()
-        if not filter_enabled or not filter_column or filter_column not in df_copy.columns:
+        if (
+            not filter_enabled
+            or not filter_column
+            or filter_column not in df_copy.columns
+        ):
             return df_copy
 
         try:
             raw_series = df_copy[filter_column].fillna("").astype(str)
-            clean_series = raw_series.str.replace(r'[^\d.-]', '', regex=True)
-            filter_series = pd.to_numeric(clean_series, errors='coerce')
+            clean_series = raw_series.str.replace(r"[^\d.-]", "", regex=True)
+            filter_series = pd.to_numeric(clean_series, errors="coerce")
             mask = pd.Series([True] * len(df_copy))
-
 
             if min_val_str:
                 try:
@@ -91,7 +95,6 @@ class DataManager:
                 except ValueError:
                     pass
 
-
             filtered = df_copy[mask].reset_index(drop=True)
             return filtered
         except Exception as e:
@@ -106,11 +109,16 @@ class DataManager:
             return None
 
         header_len = len(headers)
-        cleaned_data = [row[:header_len] if len(row) >= header_len else row + [""] * (header_len - len(row)) for row in data]
+        cleaned_data = [
+            row[:header_len]
+            if len(row) >= header_len
+            else row + [""] * (header_len - len(row))
+            for row in data
+        ]
 
         temp_df = pd.DataFrame(cleaned_data, columns=headers).astype(str)
-        temp_df.replace(r'^\s*$', pd.NA, regex=True, inplace=True)
-        temp_df.dropna(how='all', inplace=True)
+        temp_df.replace(r"^\s*$", pd.NA, regex=True, inplace=True)
+        temp_df.dropna(how="all", inplace=True)
         self._raw_df = temp_df.fillna("")
         return self._raw_df
 

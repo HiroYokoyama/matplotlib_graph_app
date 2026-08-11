@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-import pytest
 import json
 import pandas as pd
 from unittest.mock import MagicMock
@@ -10,7 +9,9 @@ def test_build_project_dict():
     mock_app = MagicMock()
     mock_app.df = pd.DataFrame({"X": [1, 2], "Y": [10, 20]})
     mock_app.get_data_from_sheet = MagicMock()
-    mock_app.get_x_tabs_data = MagicMock(return_value=[{"tab_name": "X-Tab 1", "x_axis": "X"}])
+    mock_app.get_x_tabs_data = MagicMock(
+        return_value=[{"tab_name": "X-Tab 1", "x_axis": "X"}]
+    )
 
     # Setup mock variables
     mock_app.plot_type_var.get.return_value = "line"
@@ -34,7 +35,6 @@ def test_save_project_file(tmp_path):
     mock_app.df = pd.DataFrame({"A": [1], "B": [2]})
     mock_app.get_data_from_sheet = MagicMock()
     mock_app.get_x_tabs_data = MagicMock(return_value=[])
-
 
     target_path = tmp_path / "project.pmggrp"
     save_project_file(mock_app, str(target_path), version_str="0.6.0", dimension="2D")
