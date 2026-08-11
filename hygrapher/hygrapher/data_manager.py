@@ -7,6 +7,7 @@ Manages raw and filtered dataframes non-destructively, handles CSV/Excel reading
 and provides clean interfaces for sheet widgets and filtering.
 """
 
+import csv
 import os
 
 import pandas as pd
@@ -41,32 +42,84 @@ class DataManager:
         self._raw_df = df
         return self._raw_df
 
-    def load_file(self, file_path):
+    def load_file(self, file_path, header_row=0):
         """
         Load data from a CSV, TSV, plain-text, JSON, or Excel file into a
         string DataFrame. `.txt` (and any unrecognized text extension) has
         its delimiter auto-detected, so comma-, tab-, or whitespace-
         separated files all work.
+
+        `header_row` is the 0-based row (within the file) to treat as the
+        column header; any rows above it (e.g. a title/metadata line) are
+        skipped. Pass ``None`` for files with no header row at all — columns
+        are then auto-named "Column1", "Column2", etc. Ignored for `.json`,
+        whose keys are always the header.
         """
         ext = os.path.splitext(file_path)[1].lower()
 
         if ext == ".csv":
-            df = pd.read_csv(file_path, dtype=str)
+            df = pd.read_csv(file_path, dtype=str, header=header_row)
         elif ext == ".tsv":
-            df = pd.read_csv(file_path, dtype=str, sep="\t")
+            df = pd.read_csv(file_path, dtype=str, sep="\t", header=header_row)
         elif ext in (".xlsx", ".xls"):
-            df = pd.read_excel(file_path, dtype=str)
+            df = pd.read_excel(file_path, dtype=str, header=header_row)
         elif ext == ".json":
             df = pd.read_json(file_path)
             df = df.astype(str)
         else:
-            # .txt and any other plain-text format: auto-detect the delimiter
-            df = pd.read_csv(file_path, dtype=str, sep=None, engine="python")
+            # .txt and any other plain-text format: auto-detect the delimiter.
+            # (pandas' own sep=None sniffing only looks at the very first
+            # line, so it gets confused when header_row skips rows above it.)
+            delimiter = self._detect_text_delimiter(file_path)
+            df = pd.read_csv(file_path, dtype=str, sep=delimiter, header=header_row)
+
+        if header_row is None and ext != ".json":
+            df.columns = [f"Column{i + 1}" for i in range(len(df.columns))]
 
         df = df.fillna("")
         self._raw_df = df
         self.file_path = file_path
         return self._raw_df
+
+    @staticmethod
+    def _detect_text_delimiter(file_path):
+        with open(file_path, "r", encoding="utf-8", errors="replace") as f:
+            sample = f.read(4096)
+        try:
+            return csv.Sniffer().sniff(sample, delimiters=",\t; ").delimiter
+        except csv.Error:
+            return ","
+
+    def read_preview_rows(self, file_path, max_rows=20):
+        """
+        Return up to `max_rows` raw rows (list of lists of str) from a file
+        with no header assumption, for an import-preview UI to let the user
+        pick which row is the real header. Uses the stdlib `csv` reader
+        (not pandas) because a title/metadata line above the real header
+        commonly has a different field count than the data rows, which
+        pandas' tokenizer rejects outright.
+        """
+        ext = os.path.splitext(file_path)[1].lower()
+
+        if ext in (".xlsx", ".xls"):
+            raw = pd.read_excel(file_path, header=None, dtype=str, nrows=max_rows)
+            raw = raw.fillna("")
+            return raw.astype(str).values.tolist()
+
+        if ext == ".tsv":
+            delimiter = "\t"
+        elif ext == ".csv":
+            delimiter = ","
+        else:
+            delimiter = self._detect_text_delimiter(file_path)
+
+        rows = []
+        with open(file_path, "r", encoding="utf-8", errors="replace", newline="") as f:
+            for i, row in enumerate(csv.reader(f, delimiter=delimiter)):
+                if i >= max_rows:
+                    break
+                rows.append(row)
+        return rows
 
     def get_columns(self):
         if self.has_data():

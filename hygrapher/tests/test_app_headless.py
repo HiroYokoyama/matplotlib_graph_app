@@ -11,13 +11,14 @@ import pytest
 from unittest.mock import MagicMock
 
 from PyQt6.QtCore import QUrl
-from PyQt6.QtWidgets import QApplication
+from PyQt6.QtWidgets import QApplication, QDialog
 import matplotlib
 
 matplotlib.use("Agg")
 
 from hygrapher.main import GraphApp as GraphApp2D
 from hygrapher.main_3d import GraphApp3D
+from hygrapher.import_dialog import ImportPreviewDialog
 
 
 def _fake_drop_event(file_path):
@@ -27,6 +28,17 @@ def _fake_drop_event(file_path):
     event.mimeData.return_value.hasUrls.return_value = True
     event.mimeData.return_value.urls.return_value = [QUrl.fromLocalFile(file_path)]
     return event
+
+
+@pytest.fixture
+def auto_accept_import_dialog(monkeypatch):
+    """ImportPreviewDialog.exec() opens a real modal event loop, which would
+    hang forever in a headless test with nothing to click Accept. Patch it to
+    accept immediately with whatever header_row the test set up beforehand
+    (default: 0, from the dialog's own __init__)."""
+    monkeypatch.setattr(
+        ImportPreviewDialog, "exec", lambda self: QDialog.DialogCode.Accepted
+    )
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -276,7 +288,7 @@ def test_3d_project_save_load(app3d, tmp_path):
 
 
 # ── Drag & Drop Tests ─────────────────────────────────────────────────────────
-def test_2d_drop_event_loads_data_file(app2d, sample_csv):
+def test_2d_drop_event_loads_data_file(app2d, sample_csv, auto_accept_import_dialog):
     app2d.df = None
     app2d.dropEvent(_fake_drop_event(sample_csv))
     assert app2d.df is not None
@@ -289,6 +301,7 @@ def test_2d_drop_event_loads_project_file(app2d, tmp_path):
     app2d.overwrite_save()
 
     app2d.title_input.setText("")
+    # Project files (.pmggrp) skip the import-preview dialog entirely.
     app2d.dropEvent(_fake_drop_event(str(proj_path)))
     assert app2d.title_input.text() == "Dropped Project"
 
@@ -302,10 +315,62 @@ def test_2d_drop_event_ignores_unsupported_extension(app2d, tmp_path):
     assert app2d.df is None  # silently ignored, no crash
 
 
-def test_3d_drop_event_loads_data_file(app3d, sample_csv):
+def test_3d_drop_event_loads_data_file(app3d, sample_csv, auto_accept_import_dialog):
     app3d.df = None
     app3d.dropEvent(_fake_drop_event(sample_csv))
     assert app3d.df is not None
+
+
+# ── Import Preview (header-row selection) Tests ─────────────────────────────
+def test_2d_import_skips_title_row_above_header(app2d, tmp_path, monkeypatch):
+    """A file with a title line above the real header should load correctly
+    once the user (or, here, the pre-set dialog state) picks row 1 as header."""
+    messy_file = tmp_path / "messy.csv"
+    messy_file.write_text("Experiment Run 42\nTime,Val1,Val2\n1,10,100\n2,20,200\n")
+
+    def fake_exec(self):
+        self.header_row = 1
+        return QDialog.DialogCode.Accepted
+
+    monkeypatch.setattr(ImportPreviewDialog, "exec", fake_exec)
+
+    app2d.df = None
+    app2d.import_data_interactive(file_path=str(messy_file))
+
+    assert app2d.df is not None
+    assert list(app2d.df.columns) == ["Time", "Val1", "Val2"]
+    assert len(app2d.df) == 2
+
+
+def test_2d_import_no_header_auto_names_columns(app2d, tmp_path, monkeypatch):
+    headerless_file = tmp_path / "headerless.csv"
+    headerless_file.write_text("1,10,100\n2,20,200\n")
+
+    def fake_exec(self):
+        self.header_row = None
+        return QDialog.DialogCode.Accepted
+
+    monkeypatch.setattr(ImportPreviewDialog, "exec", fake_exec)
+
+    app2d.df = None
+    app2d.import_data_interactive(file_path=str(headerless_file))
+
+    assert app2d.df is not None
+    assert list(app2d.df.columns) == ["Column1", "Column2", "Column3"]
+    assert len(app2d.df) == 2
+
+
+def test_2d_import_cancelled_dialog_does_not_load(app2d, tmp_path, monkeypatch):
+    data_file = tmp_path / "data.csv"
+    data_file.write_text("A,B\n1,2\n")
+
+    monkeypatch.setattr(
+        ImportPreviewDialog, "exec", lambda self: QDialog.DialogCode.Rejected
+    )
+
+    app2d.df = None
+    app2d.import_data_interactive(file_path=str(data_file))
+    assert app2d.df is None
 
 
 # ── Reset & Clear All Tests ──────────────────────────────────────────────────

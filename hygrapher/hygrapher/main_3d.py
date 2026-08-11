@@ -28,6 +28,7 @@ from PyQt6.QtWidgets import (
     QMessageBox,
     QFormLayout,
     QSizePolicy,
+    QDialog,
 )
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QAction, QDropEvent, QDragEnterEvent
@@ -41,6 +42,7 @@ from matplotlib.figure import Figure
 from hygrapher.data_manager import DataManager
 from hygrapher.project_io import save_project_file, load_project_file
 from hygrapher.utils import resolve_cli_file
+from hygrapher.import_dialog import ImportPreviewDialog
 
 VERSION = "0.6.0"
 
@@ -65,7 +67,7 @@ class GraphApp3D(QMainWindow):
         file_menu = menu_bar.addMenu("File")
 
         open_action = QAction("Open Data File...", self)
-        open_action.triggered.connect(self.load_data)
+        open_action.triggered.connect(self.import_data_interactive)
         file_menu.addAction(open_action)
 
         save_action = QAction("Save 3D Project", self)
@@ -93,7 +95,7 @@ class GraphApp3D(QMainWindow):
         # Buttons
         btn_layout = QHBoxLayout()
         self.open_btn = QPushButton("Open File")
-        self.open_btn.clicked.connect(self.load_data)
+        self.open_btn.clicked.connect(self.import_data_interactive)
         btn_layout.addWidget(self.open_btn)
 
         self.plot_btn = QPushButton("Plot 3D")
@@ -200,9 +202,41 @@ class GraphApp3D(QMainWindow):
             if ext == ".pmggrp":
                 self.load_project_file(file_path)
             elif ext in [".csv", ".tsv", ".xlsx", ".xls", ".txt", ".json"]:
-                self.load_data(file_path=file_path)
+                self.import_data_interactive(file_path=file_path)
 
-    def load_data(self, file_path=None):
+    def import_data_interactive(self, file_path=None):
+        """
+        Interactive entry point for Open File / menu / drag-drop: shows the
+        file picker if needed, then (for row-oriented formats) a preview
+        dialog to pick which row is the header before actually loading.
+        """
+        if not file_path:
+            file_path, _ = QFileDialog.getOpenFileName(
+                self,
+                "Open Data File",
+                "",
+                "Supported Files (*.csv *.tsv *.xlsx *.xls *.txt *.json)",
+            )
+        if not file_path:
+            return
+
+        header_row = 0
+        ext = os.path.splitext(file_path)[1].lower()
+        if ext != ".json":
+            try:
+                preview_rows = self.data_mgr.read_preview_rows(file_path)
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Failed to preview file:\n{e}")
+                return
+            if len(preview_rows) > 1:
+                dialog = ImportPreviewDialog(file_path, preview_rows, parent=self)
+                if dialog.exec() != QDialog.DialogCode.Accepted:
+                    return
+                header_row = dialog.header_row
+
+        self.load_data(file_path=file_path, header_row=header_row)
+
+    def load_data(self, file_path=None, header_row=0):
         if not file_path:
             file_path, _ = QFileDialog.getOpenFileName(
                 self,
@@ -214,7 +248,7 @@ class GraphApp3D(QMainWindow):
             return
 
         try:
-            self.df = self.data_mgr.load_file(file_path)
+            self.df = self.data_mgr.load_file(file_path, header_row=header_row)
             self.populate_data_table()
             self.update_combos()
         except Exception as e:
