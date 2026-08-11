@@ -1,154 +1,123 @@
 # HYGrapher (2D & 3D)
 
-**Author**: Hiromichi Yokoyama
-**License**: Apache-2.0
-**Repo**: `https://github.com/HiroYokoyama/matplotlib_graph_app`
+[![HYGrapher CI](https://github.com/HiroYokoyama/matplotlib_graph_app/actions/workflows/ci.yml/badge.svg)](https://github.com/HiroYokoyama/matplotlib_graph_app/actions/workflows/ci.yml)
+[![PyPI version](https://badge.fury.io/py/hygrapher.svg)](https://badge.fury.io/py/hygrapher)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
------
+A powerful, cross-platform GUI application for plotting and analyzing CSV/Excel data using Matplotlib, built with Python & Tkinter. Available in both **2D** and **3D** modes.
 
-## Overview
+---
 
-**HYGrapher** is a powerful and flexible GUI application built with Python, Tkinter, and Matplotlib for interactively visualizing CSV and Excel data. It provides a user-friendly interface to load data, customize graph aesthetics extensively, and export high-quality plots for presentations or publications.
+## ✨ Features
 
-The application comes in two modes, both included in the package:
+- **Cross-Platform Compatibility**: Fully supported on **macOS**, **Linux** (X11/Wayland with native `<Button-4>` / `<Button-5>` mouse wheel scrolling), and **Windows**.
+- **Multi X-Axis Tabs**: Configure multiple dataset tabs on a single plot, each with its own X-column and Y1/Y2 series, overlaid seamlessly on one shared graph.
+- **Non-Destructive Data Filtering**: Filter data ranges dynamically without corrupting or altering your raw loaded dataset.
+- **Integrated Data Editor**: Embedded spreadsheet viewer (`tksheet`) to inspect, edit, and update data live.
+- **2D & 3D Visualization Modes**:
+  - **2D**: Line, Scatter, Bar, Step, Stem, Area, Pie, Box, Violin, Heatmap, Contour, and Polar plots.
+  - **3D**: Surface, Wireframe, Scatter 3D, Line 3D, and Contour 3D plots.
+- **Rich Style & Graph Controls**:
+  - Independent per-series style controls (Color, Line Style, Line Width, Marker Style, Marker Size, Alpha/Opacity).
+  - Minor Ticks (show/hide & interval control for X, Y1, Y2).
+  - Customizable colormaps (Viridis, Plasma, Inferno, Coolwarm, Jet, etc.).
+  - Export DPI settings (72, 100, 150, 300, 600 DPI).
+  - Dedicated Legend font size & location controls.
+  - Data smoothing (Moving Average), Error Bars, and Data Point Value Annotations.
+- **Project Serialization**: Save and restore complete workspace states including all dataset modifications and multi-X-tab configurations using `.pmggrp` JSON project files.
+- **Drag & Drop**: Drag CSV, Excel (`.xlsx`/`.xls`), or project (`.pmggrp`) files directly into the window.
 
-  * **`hygrapher` (2D Mode)**: For creating a wide variety of standard 2D plots, including line graphs, scatter plots, bar charts, heatmaps, and contour plots, with dual Y-axis support.
-  * **`hygrapher-3d` (3D Mode)**: For generating 3D visualizations like surface plots, wireframes, and 3D scatter plots.
+---
 
-Both modes allow you to save your complete session (data + settings) as a `.pmggrp` project file, letting you resume your work later.
+## 💾 Installation
 
-## Features
-
-### General Features
-
-  * **Data Input**: Load data directly from **CSV** or **Excel** files (`.csv`, `.xlsx`, `.xls`).
-  * **Drag & Drop**: Supports drag-and-drop for data files and `.pmggrp` project files.
-  * **Data Editor**: View and edit your data directly within the app using an integrated `tksheet` table.
-  * **Project System**: Save and load your entire workspace (data and all settings) using the custom `.pmggrp` JSON-based project format.
-  * **Graph Export**: Export your finalized graph to various formats, including **PNG**, **SVG**, **PDF**, **JPEG**, and more.
-  * **Data Export**: Export the current (edited or filtered) data back to a CSV file.
-  * **Full Customization**:
-      * Set graph titles, axis labels, and font properties (family, size).
-      * Control axis limits, tick intervals, and tick direction.
-      * Toggle log scale or invert axes.
-      * Customize grid, spines, and background colors (both axes and figure).
-      * Add and position a legend.
-  * **Mode Switching**: Easily switch between 2D and 3D modes from the "File" menu.
-
------
-
-### 2D Mode (`hygrapher`)
-
-  * **Plot Types**: Supports a wide range of plots:
-      * `line`
-      * `scatter`
-      * `bar`
-      * `step`
-      * `stem`
-      * `area`
-      * `pie`
-      * `box`
-      * `violin`
-      * `heatmap`
-      * `contour` (requires `scipy`)
-      * `polar`
-  * **Dual Y-Axes**: Plot different data series on a left (Y1) and right (Y2) axis.
-  * **Per-Series Styling**: Individually customize the style (color, line style, marker, line width, alpha) for every data series on both Y1 and Y2 axes.
-  * **Advanced Features**:
-      * **Smoothing**: Apply a moving average to line plots.
-      * **Error Bars**: Add error bars to your data from a selected data column.
-      * **Annotations**: Automatically annotate data points on your graph.
-      * **Data Filtering**: Filter the data used for plotting based on a column's value range.
-      * **Subplot Mode**: Automatically split Y1 and Y2 data into two separate, vertically stacked subplots.
-
------
-
-### 3D Mode (`hygrapher-3d`)
-
-  * **Plot Types**: Create 3D visualizations:
-      * `surface` (requires `scipy`)
-      * `wireframe` (requires `scipy`)
-      * `scatter3d`
-      * `line3d`
-      * `contour3d` (requires `scipy`)
-  * **View Control**: Interactively adjust the 3D **Elevation** and **Azimuth** angles.
-  * **Surface/Wireframe Quality**: Control the **Mesh Resolution** for smoother 3D surfaces.
-  * **Colormap Selection**: Choose from a comprehensive list of Matplotlib colormaps for surface and contour plots.
-  * **Per-Series Styling**: Customize color, alpha, line width, and markers for different Z-axis data series.
-
-## Requirements
-
-  * Python 3
-  * `pandas`
-  * `matplotlib`
-  * `numpy`
-  * `tksheet`
-  * `scipy`
-  * `openpyxl`
-  * `tkinterdnd2`
-
-**Compatibility:**
-
-**This package is currently for Windows only.** The application relies on OS-specific components that are not compatible with macOS or Linux at this time.
-
-## Installation
-
-You can install HYGrapher directly from PyPI:
-
+### Install from PyPI
 ```bash
 pip install hygrapher
 ```
 
-## Usage
+### Install with Developer & Testing Dependencies
+```bash
+git clone https://github.com/HiroYokoyama/matplotlib_graph_app.git
+cd matplotlib_graph_app/hygrapher
+pip install -e .[dev]
+```
 
-### Running the Application
+---
 
-After installation, you can run the application from your command line:
+## 🚀 Usage
 
-  * **To run the 2D version:**
+### Command Line Interface
 
-    ```bash
-    hygrapher
-    ```
+Launch 2D mode:
+```bash
+hygrapher
+```
 
-  * **To run the 3D version:**
+Launch 2D mode with a dataset or project file:
+```bash
+hygrapher data.csv
+hygrapher my_project.pmggrp
+```
 
-    ```bash
-    hygrapher-3d
-    ```
+Launch 3D mode:
+```bash
+hygrapher-3d
+hygrapher-3d data.csv
+```
 
-### Loading Data
+### Python Module Entrypoint
+```bash
+python -m hygrapher
+```
 
-You can load data in several ways:
+---
 
-1.  **Menu**: Click the **"Load Data"** button or go to `File > Load Data (CSV/Excel)...`.
-2.  **Drag & Drop**: Drag a `.csv`, `.xlsx`, `.xls`, or `.pmggrp` file directly onto the application window.
-3.  **Command Line**: Pass a file path as an argument when launching the script:
-    ```bash
-    hygrapher path/to/your/data.csv
-    ```
-    or
-    ```bash
-    hygrapher-3d path/to/your/project.pmggrp
-    ```
+## 🏗️ Project Architecture
 
-### Basic Workflow
+```
+matplotlib_graph_app/
+├── .github/
+│   └── workflows/
+│       └── ci.yml             # GitHub Actions CI matrix (Ubuntu, macOS, Windows)
+├── hygrapher/
+│   ├── pyproject.toml         # Packaging metadata & entrypoints
+│   ├── hygrapher/
+│   │   ├── __init__.py        # Package exports
+│   │   ├── __main__.py        # CLI entrypoint
+│   │   ├── main.py            # 2D Application main window & Multi-X logic
+│   │   ├── main_3d.py         # 3D Application main window & camera view controls
+│   │   ├── data_manager.py    # Non-destructive data storage & range filter engine
+│   │   ├── project_io.py      # .pmggrp JSON project serialization & deserialization
+│   │   └── utils.py           # Cross-platform scroll event bindings & ticker math
+│   └── tests/
+│       ├── conftest.py        # Pytest configuration (Agg backend)
+│       ├── test_data_manager.py
+│       ├── test_project_io.py
+│       ├── test_utils.py
+│       ├── test_unit_comprehensive.py
+│       └── test_app_headless.py
+└── README.md
+```
 
-1.  Load your data.
-2.  Go to the **"Basic Settings"** tab.
-3.  Select your **Plot Type**.
-4.  Select the column for the **X-Axis**.
-5.  Select one or more columns for the **Y-Axis** (2D) or **Z-Axis** (3D).
-6.  Click the **"Plot/Update Graph"** button.
-7.  Use the other tabs (**Style**, **Font**, **Axis/Ticks**, etc.) to customize the graph.
-8.  Click **"Plot/Update Graph"** again to apply changes.
-9.  Save your work as a project (`File > Save Project`) or export the graph (`File > Export Graph...`).
+---
 
-## Known Issues
+## 🧪 Testing & CI/CD
 
-  * **Windows Only:** As stated in the requirements, the application is currently **not cross-platform**. It will not function correctly on macOS or Linux.
-  * **Technical Reason:** The code relies on Windows-specific UI event handling. Specifically, the mouse wheel scrolling uses `event.delta`, which is not available on Linux (which uses `<Button-4>`/`<Button-5>`). Furthermore, the drag-and-drop file path handling is designed to strip Windows-specific `{}` characters, which will fail on other operating systems.
+### Run Unit Tests Locally
+```bash
+cd hygrapher
+pytest -v --cov=hygrapher
+```
 
-## License
+### Build Distribution Package
+```bash
+python -m build hygrapher
+```
+This produces `.whl` wheels and `.tar.gz` source archives inside `hygrapher/dist/`.
 
-This project is licensed under the **Apache-2.0 License**.
+---
+
+## 📄 License
+
+Apache License 2.0. Created by **Hiromichi Yokoyama**.

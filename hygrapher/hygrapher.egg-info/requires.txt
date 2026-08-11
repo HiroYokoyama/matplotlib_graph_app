@@ -1,5 +1,12 @@
 pandas
 matplotlib
+numpy
+scipy
 tksheet
 openpyxl
 tkinterdnd2
+
+[dev]
+pytest>=7.0
+pytest-cov
+build

@@ -1,7 +1,7 @@
 Metadata-Version: 2.4
 Name: hygrapher
-Version: 0.5.2
-Summary: A GUI application for plotting CSV/Excel data with Matplotlib.
+Version: 0.6.0
+Summary: A cross-platform GUI application for plotting CSV/Excel data with Matplotlib.
 Author-email: HiroYokoyama <titech.yoko.hiro@gmail.com>
 Project-URL: Homepage, https://github.com/HiroYokoyama/matplotlib_graph_app
 Project-URL: Issues, https://github.com/HiroYokoyama/matplotlib_graph_app/issues
@@ -12,6 +12,12 @@ Classifier: Topic :: Scientific/Engineering :: Visualization
 Requires-Python: >=3.8
 Requires-Dist: pandas
 Requires-Dist: matplotlib
+Requires-Dist: numpy
+Requires-Dist: scipy
 Requires-Dist: tksheet
 Requires-Dist: openpyxl
 Requires-Dist: tkinterdnd2
+Provides-Extra: dev
+Requires-Dist: pytest>=7.0; extra == "dev"
+Requires-Dist: pytest-cov; extra == "dev"
+Requires-Dist: build; extra == "dev"
