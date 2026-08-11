@@ -59,9 +59,7 @@ jobs:
         run: |
           pytest hygrapher/tests/ -v --cov=hygrapher
 
-      - name: Test Distribution Package Build
-        run: |
-          python -m build hygrapher
+
 
   publish:
     name: Build & Publish Package to PyPI
