@@ -2,11 +2,11 @@ pandas
 matplotlib
 numpy
 scipy
-tksheet
+PyQt6
 openpyxl
-tkinterdnd2
 
 [dev]
 pytest>=7.0
 pytest-cov
+pytest-qt
 build

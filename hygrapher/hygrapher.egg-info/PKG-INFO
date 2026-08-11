@@ -14,10 +14,10 @@ Requires-Dist: pandas
 Requires-Dist: matplotlib
 Requires-Dist: numpy
 Requires-Dist: scipy
-Requires-Dist: tksheet
+Requires-Dist: PyQt6
 Requires-Dist: openpyxl
-Requires-Dist: tkinterdnd2
 Provides-Extra: dev
 Requires-Dist: pytest>=7.0; extra == "dev"
 Requires-Dist: pytest-cov; extra == "dev"
+Requires-Dist: pytest-qt; extra == "dev"
 Requires-Dist: build; extra == "dev"
