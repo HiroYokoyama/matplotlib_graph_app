@@ -5,8 +5,25 @@ hygrapher.utils
 Cross-platform helper utilities for Tkinter GUI events, matplotlib formatting, and font detection.
 """
 
+import os
+
 import matplotlib.font_manager as fm
 import matplotlib.ticker as ticker
+
+
+def resolve_cli_file(argv):
+    """
+    Return the first existing file path found among command-line arguments
+    (e.g. a file dragged onto the app icon, "Open with...", or
+    `hygrapher path/to/data.csv`), skipping flags like ``-x``. Returns
+    ``None`` if there isn't one, so `main()` can fall back to an empty window.
+    """
+    for arg in argv:
+        if arg.startswith("-"):
+            continue
+        if os.path.isfile(arg):
+            return arg
+    return None
 
 
 def bind_scroll_events(widget, callback_func):

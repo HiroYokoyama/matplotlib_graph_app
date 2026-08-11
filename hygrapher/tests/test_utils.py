@@ -1,6 +1,37 @@
 # -*- coding: utf-8 -*-
 from unittest.mock import MagicMock
-from hygrapher.utils import get_font_list, apply_major_ticker, apply_minor_ticker
+from hygrapher.utils import (
+    get_font_list,
+    apply_major_ticker,
+    apply_minor_ticker,
+    resolve_cli_file,
+)
+
+
+def test_resolve_cli_file_no_args():
+    assert resolve_cli_file([]) is None
+
+
+def test_resolve_cli_file_flags_only():
+    assert resolve_cli_file(["--debug", "-v"]) is None
+
+
+def test_resolve_cli_file_nonexistent_path():
+    assert resolve_cli_file(["not_a_real_file.csv"]) is None
+
+
+def test_resolve_cli_file_finds_existing_file(tmp_path):
+    data_file = tmp_path / "data.csv"
+    data_file.write_text("A,B\n1,2\n")
+
+    assert resolve_cli_file([str(data_file)]) == str(data_file)
+
+
+def test_resolve_cli_file_skips_flags_before_path(tmp_path):
+    data_file = tmp_path / "data.csv"
+    data_file.write_text("A,B\n1,2\n")
+
+    assert resolve_cli_file(["--foo", str(data_file)]) == str(data_file)
 
 
 def test_get_font_list():

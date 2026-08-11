@@ -8,7 +8,9 @@ import os
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
 
 import pytest
+from unittest.mock import MagicMock
 
+from PyQt6.QtCore import QUrl
 from PyQt6.QtWidgets import QApplication
 import matplotlib
 
@@ -16,6 +18,15 @@ matplotlib.use("Agg")
 
 from hygrapher.main import GraphApp as GraphApp2D
 from hygrapher.main_3d import GraphApp3D
+
+
+def _fake_drop_event(file_path):
+    """A MagicMock standing in for QDropEvent (real QDropEvent objects
+    can't be constructed directly from Python)."""
+    event = MagicMock()
+    event.mimeData.return_value.hasUrls.return_value = True
+    event.mimeData.return_value.urls.return_value = [QUrl.fromLocalFile(file_path)]
+    return event
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -155,12 +166,56 @@ def test_2d_subplot_and_axis_inversion(app2d):
 
 # ── Spines & Grid Styling Tests ───────────────────────────────────────────────
 def test_2d_spines_and_grid(app2d):
+    # app2d is module-scoped and shared; pin a rectangular plot type since a
+    # prior parametrized test may have left it on "polar" (different spines).
+    app2d.plot_type_combo.setCurrentIndex(app2d.plot_type_combo.findText("line"))
     app2d.spine_top_check.setChecked(False)
     app2d.spine_right_check.setChecked(False)
     app2d.grid_check.setChecked(False)
     app2d.rotate_labels_check.setChecked(True)
     app2d.rotation_angle_spin.setValue(90)
     app2d.plot_graph()
+
+    # Regression: these settings previously had no effect at all.
+    assert app2d.ax.spines["top"].get_visible() is False
+    assert app2d.ax.spines["right"].get_visible() is False
+
+
+def test_2d_axis_settings_actually_apply(app2d):
+    """Log scale / invert / Y2 label were wired into the UI but never read
+    by plot_graph(); this guards against that regressing again."""
+    app2d.plot_type_combo.setCurrentIndex(app2d.plot_type_combo.findText("line"))
+    app2d.x_log_check.setChecked(True)
+    app2d.y1_log_check.setChecked(True)
+    app2d.y1_invert_check.setChecked(True)
+    app2d.ylabel2_input.setText("Custom Y2")
+    app2d.plot_graph()
+
+    assert app2d.ax.get_xscale() == "log"
+    assert app2d.ax.get_yscale() == "log"
+    if app2d.ax2 is not None:
+        assert app2d.ax2.get_ylabel() == "Custom Y2"
+
+    # Reset for subsequent tests in this module-scoped fixture.
+    app2d.x_log_check.setChecked(False)
+    app2d.y1_log_check.setChecked(False)
+    app2d.y1_invert_check.setChecked(False)
+
+
+def test_2d_major_tick_interval_applies(app2d):
+    """apply_major_ticker() used to be called with the wrong arguments
+    (an Axes instead of an Axis, and the axis name instead of the interval
+    text), so the interval boxes silently did nothing."""
+    import matplotlib.ticker as mticker
+
+    app2d.x_log_check.setChecked(False)
+    app2d.xtick_major_interval_input.setText("2.5")
+    app2d.plot_graph()
+
+    locator = app2d.ax.xaxis.get_major_locator()
+    assert isinstance(locator, mticker.MultipleLocator)
+
+    app2d.xtick_major_interval_input.setText("")
 
 
 # ── X-Tab Management Tests ───────────────────────────────────────────────────
@@ -217,6 +272,39 @@ def test_3d_project_save_load(app3d, tmp_path):
     assert proj_path.exists()
 
     app3d.load_project_file(str(proj_path))
+    assert app3d.df is not None
+
+
+# ── Drag & Drop Tests ─────────────────────────────────────────────────────────
+def test_2d_drop_event_loads_data_file(app2d, sample_csv):
+    app2d.df = None
+    app2d.dropEvent(_fake_drop_event(sample_csv))
+    assert app2d.df is not None
+
+
+def test_2d_drop_event_loads_project_file(app2d, tmp_path):
+    proj_path = tmp_path / "dropped.pmggrp"
+    app2d.title_input.setText("Dropped Project")
+    app2d.current_project_path = str(proj_path)
+    app2d.overwrite_save()
+
+    app2d.title_input.setText("")
+    app2d.dropEvent(_fake_drop_event(str(proj_path)))
+    assert app2d.title_input.text() == "Dropped Project"
+
+
+def test_2d_drop_event_ignores_unsupported_extension(app2d, tmp_path):
+    other_file = tmp_path / "not_supported.exe"
+    other_file.write_bytes(b"\x00")
+    app2d.df = None
+
+    app2d.dropEvent(_fake_drop_event(str(other_file)))
+    assert app2d.df is None  # silently ignored, no crash
+
+
+def test_3d_drop_event_loads_data_file(app3d, sample_csv):
+    app3d.df = None
+    app3d.dropEvent(_fake_drop_event(sample_csv))
     assert app3d.df is not None
 
 

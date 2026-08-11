@@ -46,7 +46,7 @@ from matplotlib.figure import Figure
 
 from hygrapher.data_manager import DataManager
 from hygrapher.project_io import save_project_file, load_project_file
-from hygrapher.utils import apply_major_ticker, get_font_list
+from hygrapher.utils import apply_major_ticker, get_font_list, resolve_cli_file
 
 VERSION = "0.6.0"
 
@@ -1246,10 +1246,22 @@ class GraphApp(QMainWindow):
         if self.ax2:
             self.ax2.tick_params(labelsize=self.tick2_fontsize_spin.value())
 
-        apply_major_ticker(self.ax, "x", self.xtick_major_interval_input.text())
-        apply_major_ticker(self.ax, "y", self.ytick_major_interval_input.text())
+        apply_major_ticker(
+            self.ax.xaxis,
+            self.xtick_major_interval_input.text(),
+            self.x_log_check.isChecked(),
+        )
+        apply_major_ticker(
+            self.ax.yaxis,
+            self.ytick_major_interval_input.text(),
+            self.y1_log_check.isChecked(),
+        )
         if self.ax2:
-            apply_major_ticker(self.ax2, "y", self.ytick2_major_interval_input.text())
+            apply_major_ticker(
+                self.ax2.yaxis,
+                self.ytick2_major_interval_input.text(),
+                self.y2_log_check.isChecked(),
+            )
 
         if self.grid_check.isChecked():
             self.ax.grid(
@@ -1397,11 +1409,9 @@ def main():
     window = GraphApp()
     window.show()
 
-    # Support launching with a file path argument (e.g. drag a file onto the
-    # app icon, "Open with", or `hygrapher path/to/data.csv`).
-    cli_args = [a for a in sys.argv[1:] if not a.startswith("-")]
-    if cli_args and os.path.isfile(cli_args[0]):
-        window.load_data(cli_args[0])
+    cli_file = resolve_cli_file(sys.argv[1:])
+    if cli_file:
+        window.load_data(cli_file)
         if window.df is not None:
             window.plot_graph()
 

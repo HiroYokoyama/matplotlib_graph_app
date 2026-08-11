@@ -7,6 +7,8 @@ Manages raw and filtered dataframes non-destructively, handles CSV/Excel reading
 and provides clean interfaces for sheet widgets and filtering.
 """
 
+import os
+
 import pandas as pd
 
 
@@ -41,14 +43,27 @@ class DataManager:
 
     def load_file(self, file_path):
         """
-        Load data from a CSV or Excel file into a string DataFrame.
+        Load data from a CSV, TSV, plain-text, JSON, or Excel file into a
+        string DataFrame. `.txt` (and any unrecognized text extension) has
+        its delimiter auto-detected, so comma-, tab-, or whitespace-
+        separated files all work.
         """
-        if file_path.endswith(".csv"):
-            df = pd.read_csv(file_path, dtype=str)
-        else:
-            df = pd.read_excel(file_path, dtype=str)
+        ext = os.path.splitext(file_path)[1].lower()
 
-        df.fillna("", inplace=True)
+        if ext == ".csv":
+            df = pd.read_csv(file_path, dtype=str)
+        elif ext == ".tsv":
+            df = pd.read_csv(file_path, dtype=str, sep="\t")
+        elif ext in (".xlsx", ".xls"):
+            df = pd.read_excel(file_path, dtype=str)
+        elif ext == ".json":
+            df = pd.read_json(file_path)
+            df = df.astype(str)
+        else:
+            # .txt and any other plain-text format: auto-detect the delimiter
+            df = pd.read_csv(file_path, dtype=str, sep=None, engine="python")
+
+        df = df.fillna("")
         self._raw_df = df
         self.file_path = file_path
         return self._raw_df

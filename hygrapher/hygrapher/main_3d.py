@@ -40,6 +40,7 @@ from matplotlib.figure import Figure
 
 from hygrapher.data_manager import DataManager
 from hygrapher.project_io import save_project_file, load_project_file
+from hygrapher.utils import resolve_cli_file
 
 VERSION = "0.6.0"
 
@@ -410,9 +411,9 @@ def main():
     window = GraphApp3D()
     window.show()
 
-    cli_args = [a for a in sys.argv[1:] if not a.startswith("-")]
-    if cli_args and os.path.isfile(cli_args[0]):
-        window.load_data(cli_args[0])
+    cli_file = resolve_cli_file(sys.argv[1:])
+    if cli_file:
+        window.load_data(cli_file)
         if window.df is not None:
             window.plot_graph()
 
