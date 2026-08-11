@@ -46,7 +46,7 @@ from matplotlib.figure import Figure
 
 from hygrapher.data_manager import DataManager
 from hygrapher.project_io import save_project_file, load_project_file
-from hygrapher.utils import get_font_list
+from hygrapher.utils import apply_major_ticker, get_font_list
 
 VERSION = "0.6.0"
 
@@ -419,6 +419,14 @@ class GraphApp(QMainWindow):
         layout.addRow("Y2 Min:", self.ylim2_min_input)
         layout.addRow("Y2 Max:", self.ylim2_max_input)
 
+        self.xtick_major_interval_input = QLineEdit()
+        self.ytick_major_interval_input = QLineEdit()
+        self.ytick2_major_interval_input = QLineEdit()
+
+        layout.addRow("X Major Tick Interval:", self.xtick_major_interval_input)
+        layout.addRow("Y1 Major Tick Interval:", self.ytick_major_interval_input)
+        layout.addRow("Y2 Major Tick Interval:", self.ytick2_major_interval_input)
+
         self.rotate_labels_check = QCheckBox("Rotate X-Tick Labels")
         self.rotation_angle_spin = QSpinBox()
         self.rotation_angle_spin.setRange(0, 360)
@@ -463,6 +471,10 @@ class GraphApp(QMainWindow):
         self.tick_fontsize_spin = QSpinBox()
         self.tick_fontsize_spin.setValue(10)
         layout.addRow("Tick Font Size:", self.tick_fontsize_spin)
+
+        self.tick2_fontsize_spin = QSpinBox()
+        self.tick2_fontsize_spin.setValue(10)
+        layout.addRow("Y2 Tick Font Size:", self.tick2_fontsize_spin)
 
         self.legend_fontsize_spin = QSpinBox()
         self.legend_fontsize_spin.setValue(10)
@@ -568,7 +580,21 @@ class GraphApp(QMainWindow):
         self.export_dpi_spin = QSpinBox()
         self.export_dpi_spin.setRange(72, 1200)
         self.export_dpi_spin.setValue(300)
-        layout.addRow("Export DPI:", self.export_dpi_spin)
+        self.grid_alpha_spin = QDoubleSpinBox()
+        self.grid_alpha_spin.setRange(0.0, 1.0)
+        self.grid_alpha_spin.setSingleStep(0.1)
+        self.grid_alpha_spin.setValue(0.3)
+        layout.addRow("Grid Alpha:", self.grid_alpha_spin)
+
+        self.grid_linestyle_combo = QComboBox()
+        self.grid_linestyle_combo.addItems(["--", "-", "-.", ":"])
+        layout.addRow("Grid Line Style:", self.grid_linestyle_combo)
+
+        self.grid_linewidth_spin = QDoubleSpinBox()
+        self.grid_linewidth_spin.setRange(0.1, 5.0)
+        self.grid_linewidth_spin.setSingleStep(0.1)
+        self.grid_linewidth_spin.setValue(0.5)
+        layout.addRow("Grid Line Width:", self.grid_linewidth_spin)
 
         self.settings_notebook.addTab(tab, "Advanced")
 
@@ -1151,8 +1177,22 @@ class GraphApp(QMainWindow):
             self.ax, "y", self.ylim_min_input.text(), self.ylim_max_input.text()
         )
 
+        self.ax.tick_params(labelsize=self.tick_fontsize_spin.value())
+        if self.ax2:
+            self.ax2.tick_params(labelsize=self.tick2_fontsize_spin.value())
+
+        apply_major_ticker(self.ax, "x", self.xtick_major_interval_input.text())
+        apply_major_ticker(self.ax, "y", self.ytick_major_interval_input.text())
+        if self.ax2:
+            apply_major_ticker(self.ax2, "y", self.ytick2_major_interval_input.text())
+
         if self.grid_check.isChecked():
-            self.ax.grid(True)
+            self.ax.grid(
+                True,
+                alpha=self.grid_alpha_spin.value(),
+                linestyle=self.grid_linestyle_combo.currentText(),
+                linewidth=self.grid_linewidth_spin.value(),
+            )
 
         if self.rotate_labels_check.isChecked():
             self.ax.tick_params(axis="x", rotation=self.rotation_angle_spin.value())
@@ -1160,7 +1200,12 @@ class GraphApp(QMainWindow):
         if self.legend_show_check.isChecked():
             h1, l1 = self.ax.get_legend_handles_labels()
             h2, l2 = self.ax2.get_legend_handles_labels() if self.ax2 else ([], [])
-            self.ax.legend(h1 + h2, l1 + l2, loc=self.legend_loc_combo.currentText())
+            self.ax.legend(
+                h1 + h2,
+                l1 + l2,
+                loc=self.legend_loc_combo.currentText(),
+                fontsize=self.legend_fontsize_spin.value(),
+            )
 
         self.fig.tight_layout()
         self.canvas.draw()
