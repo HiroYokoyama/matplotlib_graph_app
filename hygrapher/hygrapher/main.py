@@ -1019,7 +1019,10 @@ class GraphApp(QMainWindow):
                 if len(_to_numeric_series(yc).dropna()) > 0
             ]
             if box_data:
-                self.ax.boxplot(box_data, labels=_y1_cols_0)
+                try:
+                    self.ax.boxplot(box_data, tick_labels=_y1_cols_0)
+                except TypeError:
+                    self.ax.boxplot(box_data, labels=_y1_cols_0)
                 if self.title_input.text():
                     self.ax.set_title(self.title_input.text())
                 if self.grid_check.isChecked():
