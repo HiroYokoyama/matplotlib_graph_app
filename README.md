@@ -1,31 +1,31 @@
 # HYGrapher (2D & 3D)
 
-[![HYGrapher CI](https://github.com/HiroYokoyama/matplotlib_graph_app/actions/workflows/ci.yml/badge.svg)](https://github.com/HiroYokoyama/matplotlib_graph_app/actions/workflows/ci.yml)
+[![HYGrapher CI/CD](https://github.com/HiroYokoyama/matplotlib_graph_app/actions/workflows/ci.yml/badge.svg)](https://github.com/HiroYokoyama/matplotlib_graph_app/actions/workflows/ci.yml)
 [![PyPI version](https://badge.fury.io/py/hygrapher.svg)](https://badge.fury.io/py/hygrapher)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
-A powerful, cross-platform GUI application for plotting and analyzing CSV/Excel data using Matplotlib, built with Python & Tkinter. Available in both **2D** and **3D** modes.
+A high-performance, cross-platform desktop application for plotting, visual editing, and analyzing CSV/Excel datasets using Matplotlib and **PyQt6**. Available in both **2D** and **3D** visualization modes.
 
 ---
 
-## ✨ Features
+## ✨ Key Features
 
-- **Cross-Platform Compatibility**: Fully supported on **macOS**, **Linux** (X11/Wayland with native `<Button-4>` / `<Button-5>` mouse wheel scrolling), and **Windows**.
+- **PyQt6 Architecture**: Modern OS-native look & feel, dark/light theme support, high performance, and 100% crash-free cross-platform execution on macOS, Linux, and Windows.
 - **Multi X-Axis Tabs**: Configure multiple dataset tabs on a single plot, each with its own X-column and Y1/Y2 series, overlaid seamlessly on one shared graph.
 - **Non-Destructive Data Filtering**: Filter data ranges dynamically without corrupting or altering your raw loaded dataset.
-- **Integrated Data Editor**: Embedded spreadsheet viewer (`tksheet`) to inspect, edit, and update data live.
+- **Integrated Data Sheet**: Embedded `QTableWidget` spreadsheet viewer to inspect, edit, and update dataset rows and columns in real-time.
 - **2D & 3D Visualization Modes**:
   - **2D**: Line, Scatter, Bar, Step, Stem, Area, Pie, Box, Violin, Heatmap, Contour, and Polar plots.
   - **3D**: Surface, Wireframe, Scatter 3D, Line 3D, and Contour 3D plots.
 - **Rich Style & Graph Controls**:
-  - Independent per-series style controls (Color, Line Style, Line Width, Marker Style, Marker Size, Alpha/Opacity).
-  - Minor Ticks (show/hide & interval control for X, Y1, Y2).
-  - Customizable colormaps (Viridis, Plasma, Inferno, Coolwarm, Jet, etc.).
-  - Export DPI settings (72, 100, 150, 300, 600 DPI).
-  - Dedicated Legend font size & location controls.
-  - Data smoothing (Moving Average), Error Bars, and Data Point Value Annotations.
+  - Independent per-series style controls (Color, Line Style, Line Width, Marker Style, Marker Size, Alpha/Opacity, Legend Labels).
+  - Axis formatting (rotate X-tick labels, plain numeric formatting without scientific notation, custom major tick intervals).
+  - Customizable colormaps (`viridis`, `plasma`, `inferno`, `coolwarm`, `jet`, `turbo`, etc.).
+  - High-DPI Image Export (72 to 1200 DPI PNG, PDF, SVG).
+  - Legend font size, location, and spine toggle controls.
+  - Moving Average Line Smoothing, Error Bars, and Data Point Value Annotations.
 - **Project Serialization**: Save and restore complete workspace states including all dataset modifications and multi-X-tab configurations using `.pmggrp` JSON project files.
-- **Drag & Drop**: Drag CSV, Excel (`.xlsx`/`.xls`), or project (`.pmggrp`) files directly into the window.
+- **Native Drag & Drop**: Drag CSV, TSV, Excel (`.xlsx`/`.xls`), JSON, or project (`.pmggrp`) files directly into the window to open.
 
 ---
 
@@ -36,7 +36,7 @@ A powerful, cross-platform GUI application for plotting and analyzing CSV/Excel 
 pip install hygrapher
 ```
 
-### Install with Developer & Testing Dependencies
+### Install for Development
 ```bash
 git clone https://github.com/HiroYokoyama/matplotlib_graph_app.git
 cd matplotlib_graph_app/hygrapher
@@ -66,37 +66,38 @@ hygrapher-3d
 hygrapher-3d data.csv
 ```
 
-### Python Module Entrypoint
+### Python Entrypoint
 ```bash
 python -m hygrapher
+python -m hygrapher.main_3d
 ```
 
 ---
 
-## 🏗️ Project Architecture
+## 🏗️ Architecture & Modules
 
 ```
 matplotlib_graph_app/
 ├── .github/
 │   └── workflows/
-│       └── ci.yml             # GitHub Actions CI matrix (Ubuntu, macOS, Windows)
+│       └── ci.yml             # Automated CI matrix testing & PyPI tag publishing
 ├── hygrapher/
 │   ├── pyproject.toml         # Packaging metadata & entrypoints
 │   ├── hygrapher/
-│   │   ├── __init__.py        # Package exports
+│   │   ├── __init__.py        # Package version & exports
 │   │   ├── __main__.py        # CLI entrypoint
-│   │   ├── main.py            # 2D Application main window & Multi-X logic
-│   │   ├── main_3d.py         # 3D Application main window & camera view controls
+│   │   ├── main.py            # 2D Application main window (PyQt6 QMainWindow)
+│   │   ├── main_3d.py         # 3D Application main window (mplot3d & QMainWindow)
 │   │   ├── data_manager.py    # Non-destructive data storage & range filter engine
 │   │   ├── project_io.py      # .pmggrp JSON project serialization & deserialization
-│   │   └── utils.py           # Cross-platform scroll event bindings & ticker math
+│   │   └── utils.py           # Cross-platform ticker math & font manager helpers
 │   └── tests/
-│       ├── conftest.py        # Pytest configuration (Agg backend)
+│       ├── conftest.py        # Pytest configuration & offscreen Qt setup
+│       ├── test_app_headless.py # 38 fine-grained PyQt6 application tests
 │       ├── test_data_manager.py
 │       ├── test_project_io.py
-│       ├── test_utils.py
 │       ├── test_unit_comprehensive.py
-│       └── test_app_headless.py
+│       └── test_utils.py
 └── README.md
 ```
 
@@ -110,11 +111,16 @@ cd hygrapher
 pytest -v --cov=hygrapher
 ```
 
-### Build Distribution Package
+### Build & Release Workflow
+The repository includes automated GitHub Actions CI/CD (`.github/workflows/ci.yml`):
+- Runs unit tests and coverage across Linux, macOS, and Windows matrix.
+- **Automated PyPI Publishing**: Pushing any tag matching `v*` (e.g. `v0.6.0`) automatically builds wheels and publishes the release package to PyPI.
+
 ```bash
-python -m build hygrapher
+# Release a new version:
+git tag v0.6.0
+git push origin v0.6.0
 ```
-This produces `.whl` wheels and `.tar.gz` source archives inside `hygrapher/dist/`.
 
 ---
 
