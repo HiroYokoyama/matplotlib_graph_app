@@ -3,39 +3,142 @@
 hygrapher.project_io
 
 Project File (.pmggrp) Serialization & Deserialization Module.
+
+Maps the PyQt6 widget state on ``GraphApp`` (and ``GraphApp3D``) to/from a
+plain JSON-serializable dict. Every entry in ``_FIELD_SPEC`` names the real
+widget attribute set in main.py / main_3d.py — keep this list in sync with
+the UI or a round trip through Save/Load Project will silently drop that
+setting.
 """
 
 import json
 from datetime import datetime
 
+# (settings_key, widget_attr, kind, default)
+# kind: "text" (QLineEdit), "check" (QCheckBox), "int" (QSpinBox),
+#       "float" (QDoubleSpinBox), "combo" (QComboBox by text)
+_FIELD_SPEC = [
+    ("title", "title_input", "text", ""),
+    ("xlabel", "xlabel_input", "text", ""),
+    ("ylabel", "ylabel_input", "text", ""),
+    ("ylabel2", "ylabel2_input", "text", ""),
+    ("plot_type", "plot_type_combo", "combo", "line"),
+    ("x_log_scale", "x_log_check", "check", False),
+    ("y1_log_scale", "y1_log_check", "check", False),
+    ("y2_log_scale", "y2_log_check", "check", False),
+    ("y1_invert", "y1_invert_check", "check", False),
+    ("y2_invert", "y2_invert_check", "check", False),
+    ("grid", "grid_check", "check", True),
+    ("subplot_mode", "subplot_mode_check", "check", False),
+    ("xlim_min", "xlim_min_input", "text", ""),
+    ("xlim_max", "xlim_max_input", "text", ""),
+    ("ylim_min", "ylim_min_input", "text", ""),
+    ("ylim_max", "ylim_max_input", "text", ""),
+    ("ylim2_min", "ylim2_min_input", "text", ""),
+    ("ylim2_max", "ylim2_max_input", "text", ""),
+    ("xtick_major_interval", "xtick_major_interval_input", "text", ""),
+    ("ytick_major_interval", "ytick_major_interval_input", "text", ""),
+    ("ytick2_major_interval", "ytick2_major_interval_input", "text", ""),
+    ("rotate_labels", "rotate_labels_check", "check", False),
+    ("rotation_angle", "rotation_angle_spin", "int", 45),
+    ("xaxis_plain_format", "xaxis_plain_check", "check", False),
+    ("yaxis1_plain_format", "yaxis1_plain_check", "check", False),
+    ("yaxis2_plain_format", "yaxis2_plain_check", "check", False),
+    ("font_family", "font_family_combo", "combo", "sans-serif"),
+    ("title_fontsize", "title_fontsize_spin", "int", 14),
+    ("xlabel_fontsize", "xlabel_fontsize_spin", "int", 12),
+    ("ylabel_fontsize", "ylabel_fontsize_spin", "int", 12),
+    ("ylabel2_fontsize", "ylabel2_fontsize_spin", "int", 12),
+    ("tick_fontsize", "tick_fontsize_spin", "int", 10),
+    ("tick2_fontsize", "tick2_fontsize_spin", "int", 10),
+    ("legend_fontsize", "legend_fontsize_spin", "int", 10),
+    ("spine_top", "spine_top_check", "check", True),
+    ("spine_bottom", "spine_bottom_check", "check", True),
+    ("spine_left", "spine_left_check", "check", True),
+    ("spine_right", "spine_right_check", "check", True),
+    ("legend_show", "legend_show_check", "check", False),
+    ("legend_loc", "legend_loc_combo", "combo", "best"),
+    ("enable_smoothing", "enable_smoothing_check", "check", False),
+    ("smoothing_window", "smoothing_window_spin", "int", 5),
+    ("enable_errorbar", "enable_errorbar_check", "check", False),
+    ("errorbar_column", "errorbar_column_combo", "combo", ""),
+    ("enable_annotation", "enable_annotation_check", "check", False),
+    ("data_filter_enabled", "data_filter_check", "check", False),
+    ("filter_column", "filter_column_combo", "combo", ""),
+    ("filter_min", "filter_min_input", "text", ""),
+    ("filter_max", "filter_max_input", "text", ""),
+    ("colormap", "colormap_combo", "combo", "viridis"),
+    ("export_dpi", "export_dpi_spin", "int", 300),
+    ("grid_alpha", "grid_alpha_spin", "float", 0.3),
+    ("grid_linestyle", "grid_linestyle_combo", "combo", "--"),
+    ("grid_linewidth", "grid_linewidth_spin", "float", 0.5),
+]
 
-def _safe_get(var, default=""):
-    if var is None:
+# Same idea for the 3D plotter window (GraphApp3D).
+_FIELD_SPEC_3D = [
+    ("title", "title_input", "text", ""),
+    ("plot_type", "plot_type_combo", "combo", "surface"),
+    ("x_axis", "x_axis_combo", "combo", ""),
+    ("y_axis", "y_axis_combo", "combo", ""),
+    ("view_elev", "elev_spin", "int", 30),
+    ("view_azim", "azim_spin", "int", -60),
+    ("mesh_resolution", "resolution_spin", "int", 30),
+    ("colormap", "colormap_combo", "combo", "viridis"),
+]
+
+
+def _get_field(app, attr, kind, default):
+    widget = getattr(app, attr, None)
+    if widget is None:
         return default
     try:
-        val = var.get()
-        if isinstance(val, (str, int, float, bool, list, dict)):
-            return val
-        return str(val)
+        if kind == "text":
+            return widget.text()
+        if kind == "check":
+            return bool(widget.isChecked())
+        if kind in ("int", "float"):
+            return widget.value()
+        if kind == "combo":
+            return widget.currentText()
     except Exception:
         return default
+    return default
 
 
-def _safe_dict(val):
-    return val if isinstance(val, dict) else {}
+def _set_field(app, attr, kind, value):
+    widget = getattr(app, attr, None)
+    if widget is None or value is None:
+        return
+    try:
+        if kind == "text":
+            widget.setText(str(value))
+        elif kind == "check":
+            widget.setChecked(bool(value))
+        elif kind == "int":
+            widget.setValue(int(value))
+        elif kind == "float":
+            widget.setValue(float(value))
+        elif kind == "combo":
+            idx = widget.findText(str(value))
+            if idx >= 0:
+                widget.setCurrentIndex(idx)
+            else:
+                widget.setCurrentText(str(value))
+    except Exception:
+        pass
 
 
-def _safe_list(val):
-    return val if isinstance(val, list) else []
+def _spec_for(dimension):
+    return _FIELD_SPEC_3D if dimension == "3D" else _FIELD_SPEC
 
 
 def build_project_dict(app, version_str="0.6.0", dimension="2D"):
     """
     Consolidate application state into a project dictionary for .pmggrp export.
     """
-    if hasattr(app, "get_data_from_sheet"):
+    if hasattr(app, "get_data_from_table"):
         try:
-            app.get_data_from_sheet()
+            app.get_data_from_table()
         except Exception:
             pass
 
@@ -50,162 +153,26 @@ def build_project_dict(app, version_str="0.6.0", dimension="2D"):
         except Exception:
             x_tabs_data = []
 
-    y1_idx = []
-    if hasattr(app, "y_listbox") and hasattr(app.y_listbox, "curselection"):
-        try:
-            y1_idx = list(app.y_listbox.curselection())
-        except Exception:
-            y1_idx = []
-
-    y2_idx = []
-    if hasattr(app, "y2_listbox") and hasattr(app.y2_listbox, "curselection"):
-        try:
-            y2_idx = list(app.y2_listbox.curselection())
-        except Exception:
-            y2_idx = []
-
     settings = {
         "format": "Python Matplotlib Grapher App (HYGrapher) Graph Project",
-        "version": "1.1",
+        "version": "1.2",
         "application": "HYGrapher",
         "application_version": version_str,
         "dimension": dimension,
         "created": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "edited_data": data_dict,
-        "original_file_path": str(getattr(app, "data_file_path", "") or ""),
-        "plot_type": _safe_get(getattr(app, "plot_type_var", None), "line"),
-        "x_axis": _safe_get(getattr(app, "x_axis_var", None), ""),
-        "y_axis_indices": _safe_list(y1_idx),
-        "y2_axis_indices": _safe_list(y2_idx),
-        "x_tabs": _safe_list(x_tabs_data),
-        "title": _safe_get(getattr(app, "title_var", None), ""),
-        "xlabel": _safe_get(getattr(app, "xlabel_var", None), ""),
-        "ylabel": _safe_get(getattr(app, "ylabel_var", None), ""),
-        "ylabel2": _safe_get(getattr(app, "ylabel2_var", None), ""),
-        "y1_series_styles": _safe_dict(getattr(app, "y1_series_styles", None)),
-        "y2_series_styles": _safe_dict(getattr(app, "y2_series_styles", None)),
-        "grid": _safe_get(getattr(app, "grid_var", None), False),
-        "marker": _safe_get(getattr(app, "marker_var", None), True),
-        "font_family": _safe_get(getattr(app, "font_family_var", None), "sans-serif"),
-        "title_fontsize": _safe_get(getattr(app, "title_fontsize_var", None), 16.0),
-        "xlabel_fontsize": _safe_get(getattr(app, "xlabel_fontsize_var", None), 14.0),
-        "ylabel_fontsize": _safe_get(getattr(app, "ylabel_fontsize_var", None), 14.0),
-        "ylabel2_fontsize": _safe_get(getattr(app, "ylabel2_fontsize_var", None), 14.0),
-        "tick_fontsize": _safe_get(getattr(app, "tick_fontsize_var", None), 14.0),
-        "tick2_fontsize": _safe_get(getattr(app, "tick2_fontsize_var", None), 14.0),
-        "legend_fontsize": _safe_get(getattr(app, "legend_fontsize_var", None), 12.0),
-        "fig_width": _safe_get(getattr(app, "fig_width_var", None), 7.0),
-        "fig_height": _safe_get(getattr(app, "fig_height_var", None), 6.0),
-        "xlim_min": _safe_get(getattr(app, "xlim_min_var", None), ""),
-        "xlim_max": _safe_get(getattr(app, "xlim_max_var", None), ""),
-        "ylim_min": _safe_get(getattr(app, "ylim_min_var", None), ""),
-        "ylim_max": _safe_get(getattr(app, "ylim_max_var", None), ""),
-        "ylim2_min": _safe_get(getattr(app, "ylim2_min_var", None), ""),
-        "ylim2_max": _safe_get(getattr(app, "ylim2_max_var", None), ""),
-        "xtick_show": _safe_get(getattr(app, "xtick_show_var", None), True),
-        "xtick_label_show": _safe_get(getattr(app, "xtick_label_show_var", None), True),
-        "xtick_direction": _safe_get(getattr(app, "xtick_direction_var", None), "out"),
-        "ytick_show": _safe_get(getattr(app, "ytick_show_var", None), True),
-        "ytick_label_show": _safe_get(getattr(app, "ytick_label_show_var", None), True),
-        "ytick_direction": _safe_get(getattr(app, "ytick_direction_var", None), "out"),
-        "ytick2_show": _safe_get(getattr(app, "ytick2_show_var", None), True),
-        "ytick2_label_show": _safe_get(
-            getattr(app, "ytick2_label_show_var", None), True
-        ),
-        "ytick2_direction": _safe_get(
-            getattr(app, "ytick2_direction_var", None), "out"
-        ),
-        "xtick_minor_show": _safe_get(
-            getattr(app, "xtick_minor_show_var", None), False
-        ),
-        "ytick_minor_show": _safe_get(
-            getattr(app, "ytick_minor_show_var", None), False
-        ),
-        "ytick2_minor_show": _safe_get(
-            getattr(app, "ytick2_minor_show_var", None), False
-        ),
-        "xtick_minor_interval": _safe_get(
-            getattr(app, "xtick_minor_interval_var", None), ""
-        ),
-        "ytick_minor_interval": _safe_get(
-            getattr(app, "ytick_minor_interval_var", None), ""
-        ),
-        "ytick2_minor_interval": _safe_get(
-            getattr(app, "ytick2_minor_interval_var", None), ""
-        ),
-        "xaxis_plain_format": _safe_get(
-            getattr(app, "xaxis_plain_format_var", None), False
-        ),
-        "yaxis1_plain_format": _safe_get(
-            getattr(app, "yaxis1_plain_format_var", None), False
-        ),
-        "yaxis2_plain_format": _safe_get(
-            getattr(app, "yaxis2_plain_format_var", None), False
-        ),
-        "xtick_major_interval": _safe_get(
-            getattr(app, "xtick_major_interval_var", None), ""
-        ),
-        "ytick_major_interval": _safe_get(
-            getattr(app, "ytick_major_interval_var", None), ""
-        ),
-        "ytick2_major_interval": _safe_get(
-            getattr(app, "ytick2_major_interval_var", None), ""
-        ),
-        "spine_top": _safe_get(getattr(app, "spine_top_var", None), True),
-        "spine_bottom": _safe_get(getattr(app, "spine_bottom_var", None), True),
-        "spine_left": _safe_get(getattr(app, "spine_left_var", None), True),
-        "spine_right": _safe_get(getattr(app, "spine_right_var", None), True),
-        "face_color": _safe_get(getattr(app, "face_color_var", None), "#FFFFFF"),
-        "fig_color": _safe_get(getattr(app, "fig_color_var", None), "#FFFFFF"),
-        "legend_show": _safe_get(getattr(app, "legend_show_var", None), False),
-        "legend_loc": _safe_get(getattr(app, "legend_loc_var", None), "best"),
-        "x_log_scale": _safe_get(getattr(app, "x_log_scale_var", None), False),
-        "y1_log_scale": _safe_get(getattr(app, "y1_log_scale_var", None), False),
-        "y2_log_scale": _safe_get(getattr(app, "y2_log_scale_var", None), False),
-        "x_invert": _safe_get(getattr(app, "x_invert_var", None), False),
-        "y1_invert": _safe_get(getattr(app, "y1_invert_var", None), False),
-        "y2_invert": _safe_get(getattr(app, "y2_invert_var", None), False),
-        "enable_smoothing": _safe_get(
-            getattr(app, "enable_smoothing_var", None), False
-        ),
-        "smoothing_window": _safe_get(getattr(app, "smoothing_window_var", None), 5),
-        "enable_errorbar": _safe_get(getattr(app, "enable_errorbar_var", None), False),
-        "errorbar_column": _safe_get(getattr(app, "errorbar_column_var", None), ""),
-        "enable_annotation": _safe_get(
-            getattr(app, "enable_annotation_var", None), False
-        ),
-        "data_filter_enabled": _safe_get(
-            getattr(app, "data_filter_enabled_var", None), False
-        ),
-        "filter_min": _safe_get(getattr(app, "filter_min_var", None), ""),
-        "filter_max": _safe_get(getattr(app, "filter_max_var", None), ""),
-        "filter_column": _safe_get(getattr(app, "filter_column_var", None), ""),
-        "grid_alpha": _safe_get(getattr(app, "grid_alpha_var", None), 0.3),
-        "grid_linestyle": _safe_get(getattr(app, "grid_linestyle_var", None), "--"),
-        "grid_linewidth": _safe_get(getattr(app, "grid_linewidth_var", None), 0.5),
-        "subplot_mode": _safe_get(getattr(app, "subplot_mode_var", None), False),
-        "rotate_labels": _safe_get(getattr(app, "rotate_labels_var", None), False),
-        "rotation_angle": _safe_get(getattr(app, "rotation_angle_var", None), 45),
-        "export_dpi": _safe_get(getattr(app, "export_dpi_var", None), 150),
-        "colormap": _safe_get(getattr(app, "colormap_var", None), "viridis"),
-        "tight_layout_pad": _safe_get(getattr(app, "tight_layout_pad_var", None), 1.0),
+        "x_tabs": x_tabs_data,
+        "y1_series_styles": dict(getattr(app, "y1_series_styles", None) or {}),
+        "y2_series_styles": dict(getattr(app, "y2_series_styles", None) or {}),
     }
 
-    if dimension == "3D":
-        settings.update(
-            {
-                "y_axis": _safe_get(getattr(app, "y_axis_var", None), ""),
-                "z_axis_indices": y1_idx,
-                "zlabel": _safe_get(getattr(app, "zlabel_var", None), ""),
-                "z_log_scale": _safe_get(getattr(app, "z_log_scale_var", None), False),
-                "z_invert": _safe_get(getattr(app, "z_invert_var", None), False),
-                "view_elev": _safe_get(getattr(app, "view_elev_var", None), 30),
-                "view_azim": _safe_get(getattr(app, "view_azim_var", None), -60),
-                "mesh_resolution": _safe_get(
-                    getattr(app, "mesh_resolution_var", None), 50
-                ),
-            }
-        )
+    for key, attr, kind, default in _spec_for(dimension):
+        settings[key] = _get_field(app, attr, kind, default)
+
+    if dimension == "3D" and hasattr(app, "z_listbox"):
+        settings["z_columns"] = [
+            item.text() for item in app.z_listbox.selectedItems()
+        ]
 
     return settings
 
@@ -220,12 +187,42 @@ def save_project_file(app, file_path, version_str="0.6.0", dimension="2D"):
     return settings
 
 
+def _restore_x_tabs(app, x_tabs_data):
+    if not hasattr(app, "x_tab_widgets") or not x_tabs_data:
+        return
+
+    # Ensure we have exactly as many X-tabs as were saved.
+    while len(app.x_tab_widgets) < len(x_tabs_data) and hasattr(app, "add_x_tab"):
+        app.add_x_tab()
+    while len(app.x_tab_widgets) > len(x_tabs_data) and hasattr(app, "remove_x_tab"):
+        app.remove_x_tab(app.x_tab_widgets[-1]["tab_widget"])
+
+    for info, saved in zip(app.x_tab_widgets, x_tabs_data):
+        x_combo = info.get("x_combo")
+        if x_combo is not None:
+            x_col = saved.get("x_axis", "")
+            idx = x_combo.findText(x_col)
+            if idx >= 0:
+                x_combo.setCurrentIndex(idx)
+
+        for key, listbox_key in (("y1_cols", "y1_listbox"), ("y2_cols", "y2_listbox")):
+            listbox = info.get(listbox_key)
+            if listbox is None:
+                continue
+            wanted = set(saved.get(key, []))
+            for row in range(listbox.count()):
+                item = listbox.item(row)
+                item.setSelected(item.text() in wanted)
+
+
 def load_project_file(app, file_path):
     """
-    Load project JSON file and restore app data.
+    Load project JSON file and restore app data and settings.
     """
     with open(file_path, "r", encoding="utf-8") as f:
         settings = json.load(f)
+
+    dimension = settings.get("dimension", "2D")
 
     edited_data = settings.get("edited_data")
     if edited_data and isinstance(edited_data, dict):
@@ -243,5 +240,32 @@ def load_project_file(app, file_path):
                 app.update_plot_options()
             elif hasattr(app, "update_combos"):
                 app.update_combos()
+
+    for key, attr, kind, _default in _spec_for(dimension):
+        if key in settings:
+            _set_field(app, attr, kind, settings[key])
+
+    if hasattr(app, "y1_series_styles") and isinstance(
+        settings.get("y1_series_styles"), dict
+    ):
+        app.y1_series_styles = dict(settings["y1_series_styles"])
+    if hasattr(app, "y2_series_styles") and isinstance(
+        settings.get("y2_series_styles"), dict
+    ):
+        app.y2_series_styles = dict(settings["y2_series_styles"])
+
+    _restore_x_tabs(app, settings.get("x_tabs", []))
+
+    if dimension == "3D" and hasattr(app, "z_listbox"):
+        wanted = set(settings.get("z_columns", []))
+        for row in range(app.z_listbox.count()):
+            item = app.z_listbox.item(row)
+            item.setSelected(item.text() in wanted)
+
+    if hasattr(app, "update_style_editor_targets"):
+        try:
+            app.update_style_editor_targets()
+        except Exception:
+            pass
 
     return settings

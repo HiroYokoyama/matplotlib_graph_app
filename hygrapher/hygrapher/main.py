@@ -32,8 +32,8 @@ from PyQt6.QtWidgets import (
     QFileDialog,
     QMessageBox,
     QColorDialog,
-    QScrollArea,
     QFormLayout,
+    QSizePolicy,
 )
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QAction, QDropEvent, QDragEnterEvent
@@ -55,7 +55,8 @@ class GraphApp(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle(f"Matplotlib Graph App v{VERSION} (PyQt6)")
-        self.resize(1300, 850)
+        self.resize(1400, 900)
+        self.setMinimumSize(1000, 650)
         self.setAcceptDrops(True)
 
         self.data_mgr = DataManager()
@@ -122,6 +123,7 @@ class GraphApp(QMainWindow):
 
         # Left Panel (Settings & Data)
         left_panel = QWidget()
+        left_panel.setMinimumWidth(360)
         left_layout = QVBoxLayout(left_panel)
         left_layout.setContentsMargins(0, 0, 0, 0)
 
@@ -179,17 +181,19 @@ class GraphApp(QMainWindow):
         self.ax2 = None
 
         self.canvas = FigureCanvasQTAgg(self.fig)
+        self.canvas.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+        )
+        self.canvas.setMinimumSize(300, 250)
         self.toolbar = NavigationToolbar2QT(self.canvas, self)
 
         right_layout.addWidget(self.toolbar)
-
-        scroll_area = QScrollArea()
-        scroll_area.setWidgetResizable(True)
-        scroll_area.setWidget(self.canvas)
-        right_layout.addWidget(scroll_area)
+        right_layout.addWidget(self.canvas, stretch=1)
 
         splitter.addWidget(right_panel)
-        splitter.setSizes([550, 750])
+        splitter.setStretchFactor(0, 0)
+        splitter.setStretchFactor(1, 1)
+        splitter.setSizes([480, 920])
 
     def create_basic_settings_tab(self):
         tab = QWidget()
@@ -1172,6 +1176,15 @@ class GraphApp(QMainWindow):
             fontsize=self.ylabel_fontsize_spin.value(),
             fontfamily=font_family,
         )
+        if self.ax2:
+            y2_names = [c for tab in x_tabs_info for c in tab["y2_cols"]]
+            self.ax2.set_ylabel(
+                self.ylabel2_input.text()
+                if self.ylabel2_input.text()
+                else ", ".join(y2_names),
+                fontsize=self.ylabel2_fontsize_spin.value(),
+                fontfamily=font_family,
+            )
 
         self.set_axis_limits(
             self.ax, "x", self.xlim_min_input.text(), self.xlim_max_input.text()
@@ -1179,6 +1192,55 @@ class GraphApp(QMainWindow):
         self.set_axis_limits(
             self.ax, "y", self.ylim_min_input.text(), self.ylim_max_input.text()
         )
+        if self.ax2:
+            self.set_axis_limits(
+                self.ax2, "y", self.ylim2_min_input.text(), self.ylim2_max_input.text()
+            )
+
+        # Log scale / axis inversion (categorical axes, e.g. bar charts,
+        # can't be log-scaled — skip rather than crash the plot)
+        try:
+            if self.x_log_check.isChecked():
+                self.ax.set_xscale("log")
+            if self.y1_log_check.isChecked():
+                self.ax.set_yscale("log")
+        except ValueError:
+            pass
+        if self.y1_invert_check.isChecked():
+            self.ax.invert_yaxis()
+        if self.ax2:
+            try:
+                if self.y2_log_check.isChecked():
+                    self.ax2.set_yscale("log")
+            except ValueError:
+                pass
+            if self.y2_invert_check.isChecked():
+                self.ax2.invert_yaxis()
+
+        # Plain (non-scientific) number formatting. ticklabel_format only
+        # supports the default ScalarFormatter, so log-scale/categorical
+        # axes (which use a different formatter) are skipped silently.
+        if self.xaxis_plain_check.isChecked():
+            try:
+                self.ax.ticklabel_format(axis="x", style="plain", useOffset=False)
+            except (ValueError, AttributeError):
+                pass
+        if self.yaxis1_plain_check.isChecked():
+            try:
+                self.ax.ticklabel_format(axis="y", style="plain", useOffset=False)
+            except (ValueError, AttributeError):
+                pass
+        if self.ax2 and self.yaxis2_plain_check.isChecked():
+            try:
+                self.ax2.ticklabel_format(axis="y", style="plain", useOffset=False)
+            except (ValueError, AttributeError):
+                pass
+
+        # Spine visibility
+        self.ax.spines["top"].set_visible(self.spine_top_check.isChecked())
+        self.ax.spines["bottom"].set_visible(self.spine_bottom_check.isChecked())
+        self.ax.spines["left"].set_visible(self.spine_left_check.isChecked())
+        self.ax.spines["right"].set_visible(self.spine_right_check.isChecked())
 
         self.ax.tick_params(labelsize=self.tick_fontsize_spin.value())
         if self.ax2:
@@ -1334,6 +1396,15 @@ def main():
     app = QApplication(sys.argv)
     window = GraphApp()
     window.show()
+
+    # Support launching with a file path argument (e.g. drag a file onto the
+    # app icon, "Open with", or `hygrapher path/to/data.csv`).
+    cli_args = [a for a in sys.argv[1:] if not a.startswith("-")]
+    if cli_args and os.path.isfile(cli_args[0]):
+        window.load_data(cli_args[0])
+        if window.df is not None:
+            window.plot_graph()
+
     sys.exit(app.exec())
 
 

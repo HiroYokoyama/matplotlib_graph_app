@@ -9,7 +9,7 @@ from hygrapher.utils import (
     apply_minor_ticker,
 )
 from hygrapher.data_manager import DataManager
-from hygrapher.project_io import build_project_dict, save_project_file, _safe_get
+from hygrapher.project_io import build_project_dict, save_project_file, _get_field
 
 
 def test_utils_functions():
@@ -69,29 +69,36 @@ def test_data_manager_complete(tmp_path):
 
 
 def test_project_io_helpers(tmp_path):
-    assert _safe_get(None, "def") == "def"
-
-    class DummyVar:
-        def get(self):
+    class DummyWidget:
+        def text(self):
             return "val"
 
-    assert _safe_get(DummyVar(), "def") == "val"
-
-    class ErrVar:
-        def get(self):
-            raise ValueError("err")
-
-    assert _safe_get(ErrVar(), "fallback") == "fallback"
+    assert _get_field(None, "any_attr", "text", "def") == "def"
 
     class MockApp:
+        pass
+
+    assert _get_field(MockApp(), "missing_attr", "text", "def") == "def"
+
+    app_with_widget = MockApp()
+    app_with_widget.some_input = DummyWidget()
+    assert _get_field(app_with_widget, "some_input", "text", "def") == "val"
+
+    class ErrWidget:
+        def text(self):
+            raise ValueError("err")
+
+    app_with_err = MockApp()
+    app_with_err.bad_input = ErrWidget()
+    assert _get_field(app_with_err, "bad_input", "text", "fallback") == "fallback"
+
+    class MockApp2D:
         def __init__(self):
             self.df = pd.DataFrame({"A": [1, 2], "B": [3, 4]})
-            self.data_file_path = "/path/data.csv"
 
-    app = MockApp()
+    app = MockApp2D()
     p_dict = build_project_dict(app, version_str="0.6.0", dimension="2D")
     assert p_dict["application"] == "HYGrapher"
-    assert p_dict["original_file_path"] == "/path/data.csv"
     assert p_dict["edited_data"]["columns"] == ["A", "B"]
 
     p_dict_3d = build_project_dict(app, version_str="0.6.0", dimension="3D")

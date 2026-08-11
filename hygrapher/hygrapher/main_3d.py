@@ -27,6 +27,7 @@ from PyQt6.QtWidgets import (
     QFileDialog,
     QMessageBox,
     QFormLayout,
+    QSizePolicy,
 )
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QAction, QDropEvent, QDragEnterEvent
@@ -47,7 +48,8 @@ class GraphApp3D(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle(f"Matplotlib 3D Graph App v{VERSION} (PyQt6)")
-        self.resize(1200, 800)
+        self.resize(1300, 850)
+        self.setMinimumSize(950, 600)
         self.setAcceptDrops(True)
 
         self.data_mgr = DataManager()
@@ -171,13 +173,19 @@ class GraphApp3D(QMainWindow):
         self.ax = self.fig.add_subplot(111, projection="3d")
 
         self.canvas = FigureCanvasQTAgg(self.fig)
+        self.canvas.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+        )
+        self.canvas.setMinimumSize(300, 250)
         self.toolbar = NavigationToolbar2QT(self.canvas, self)
 
         right_layout.addWidget(self.toolbar)
-        right_layout.addWidget(self.canvas)
+        right_layout.addWidget(self.canvas, stretch=1)
 
         splitter.addWidget(right_panel)
-        splitter.setSizes([450, 750])
+        splitter.setStretchFactor(0, 0)
+        splitter.setStretchFactor(1, 1)
+        splitter.setSizes([420, 880])
 
     def dragEnterEvent(self, event: QDragEnterEvent):
         if event.mimeData().hasUrls():
@@ -401,6 +409,13 @@ def main():
     app = QApplication(sys.argv)
     window = GraphApp3D()
     window.show()
+
+    cli_args = [a for a in sys.argv[1:] if not a.startswith("-")]
+    if cli_args and os.path.isfile(cli_args[0]):
+        window.load_data(cli_args[0])
+        if window.df is not None:
+            window.plot_graph()
+
     sys.exit(app.exec())
 
 

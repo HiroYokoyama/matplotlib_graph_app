@@ -15,7 +15,7 @@ import matplotlib
 matplotlib.use("Agg")
 
 from hygrapher.main import GraphApp as GraphApp2D
-from hygrapher.main_3d import GraphApp as GraphApp3D
+from hygrapher.main_3d import GraphApp3D
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -183,13 +183,31 @@ def test_2d_table_editing(app2d):
 
 # ── Project File I/O Tests ────────────────────────────────────────────────────
 def test_2d_project_save_load(app2d, tmp_path):
+    app2d.title_input.setText("Round Trip Title")
+    app2d.plot_type_combo.setCurrentIndex(app2d.plot_type_combo.findText("scatter"))
+    app2d.grid_check.setChecked(False)
+    app2d.spine_top_check.setChecked(False)
+    app2d.x_log_check.setChecked(True)
+
     proj_path = tmp_path / "test_project.pmggrp"
     app2d.current_project_path = str(proj_path)
     app2d.overwrite_save()
     assert proj_path.exists()
 
+    # Clear the widgets so the load actually has to restore them.
+    app2d.title_input.setText("")
+    app2d.plot_type_combo.setCurrentIndex(0)
+    app2d.grid_check.setChecked(True)
+    app2d.spine_top_check.setChecked(True)
+    app2d.x_log_check.setChecked(False)
+
     app2d.load_project_file(str(proj_path))
     assert app2d.df is not None
+    assert app2d.title_input.text() == "Round Trip Title"
+    assert app2d.plot_type_combo.currentText() == "scatter"
+    assert app2d.grid_check.isChecked() is False
+    assert app2d.spine_top_check.isChecked() is False
+    assert app2d.x_log_check.isChecked() is True
 
 
 def test_3d_project_save_load(app3d, tmp_path):
