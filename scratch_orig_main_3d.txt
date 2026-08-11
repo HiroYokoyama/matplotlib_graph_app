@@ -1,0 +1,648 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+"""
+hygrapher.main_3d
+
+Author: Hiromichi Yokoyama
+License: Apache-2.0 license
+Repo: https://github.com/HiroYokoyama/matplotlib_graph_app
+
+3D graphing module for HYGrapher with cross-platform scrolling and project I/O.
+"""
+
+VERSION = "0.6.0"
+
+import os
+import sys
+import json
+import tkinter as tk
+from tkinter import ttk, filedialog, messagebox, colorchooser
+import pandas as pd
+import numpy as np
+import matplotlib
+from matplotlib.figure import Figure
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
+import matplotlib.ticker as ticker
+from mpl_toolkits.mplot3d import Axes3D
+from scipy.interpolate import griddata
+from tksheet import Sheet
+
+# Import modular utilities
+from .utils import (
+    bind_scroll_events,
+    bind_mousewheel_recursive,
+    get_font_list,
+    apply_major_ticker,
+    apply_minor_ticker,
+)
+from .data_manager import DataManager
+from .project_io import build_project_dict, save_project_file
+
+# Try to import tkinterdnd2 for drag and drop support
+try:
+    from tkinterdnd2 import TkinterDnD
+    BASE_CLASS = TkinterDnD.Tk
+    DND_AVAILABLE = True
+except ImportError:
+    BASE_CLASS = tk.Tk
+    DND_AVAILABLE = False
+
+
+class GraphApp(BASE_CLASS):
+    def __init__(self):
+        super().__init__()
+        self.title(f"HYGrapher 3D ver. {VERSION}")
+        self.geometry("1600x900")
+
+        self.data_mgr = DataManager()
+        self.sheet = None
+        self.current_project_path = ""
+
+        # Enable drag and drop
+        self.setup_drag_and_drop()
+
+        # Get Font List
+        self.font_list = get_font_list()
+
+        # Create all tk.Variables
+        self.create_all_tk_variables()
+
+        # Figure Setup
+        self.fig = Figure(figsize=(self.fig_width_var.get(), self.fig_height_var.get()), dpi=100)
+        self.ax = self.fig.add_subplot(111, projection='3d')
+        self.ax2 = None
+
+        # Menu Bar
+        self.setup_menu_bar()
+
+        # Main Layout
+        main_frame = ttk.Frame(self)
+        main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+        # Top Frame (File Operations)
+        self.setup_top_frame(main_frame)
+
+        # Content Split PanedWindow
+        content_frame = ttk.PanedWindow(main_frame, orient=tk.HORIZONTAL)
+        content_frame.pack(fill=tk.BOTH, expand=True, pady=10)
+
+        left_container = ttk.Frame(content_frame)
+        content_frame.add(left_container, weight=1)
+
+        left_paned = ttk.PanedWindow(left_container, orient=tk.VERTICAL)
+        left_paned.pack(fill=tk.BOTH, expand=True)
+
+        settings_container = ttk.Frame(left_paned)
+        left_paned.add(settings_container, weight=1)
+
+        self.plot_button = ttk.Button(settings_container, text="Plot / Update 3D Graph", command=self.plot_graph)
+        self.plot_button.pack(side=tk.BOTTOM, fill=tk.X, pady=5, padx=5)
+        self.plot_button['state'] = 'disabled'
+
+        self.settings_notebook = ttk.Notebook(settings_container)
+        self.settings_notebook.pack(fill=tk.BOTH, expand=True, pady=2)
+
+        self.create_scrollable_tab(self.settings_notebook, "Basic Settings", self.create_basic_settings_tab)
+        self.create_scrollable_tab(self.settings_notebook, "Style", self.create_style_settings_tab)
+        self.create_scrollable_tab(self.settings_notebook, "Font", self.create_font_size_tab)
+        self.create_scrollable_tab(self.settings_notebook, "Axis/Ticks", self.create_axis_ticks_tab)
+        self.create_scrollable_tab(self.settings_notebook, "Spines/BG", self.create_spines_tab)
+        self.create_scrollable_tab(self.settings_notebook, "Legend", self.create_legend_tab)
+        self.create_scrollable_tab(self.settings_notebook, "3D View / Advanced", self.create_advanced_tab)
+
+        # Data Editor section
+        data_frame = ttk.LabelFrame(left_paned, text="Data Editor")
+        left_paned.add(data_frame, weight=3)
+
+        self.sheet_frame = ttk.Frame(data_frame)
+        self.sheet_frame.pack(fill=tk.BOTH, expand=True)
+
+        # Right Panel (3D Graph Preview)
+        right_panel = ttk.LabelFrame(content_frame, text="3D Graph Preview")
+        content_frame.add(right_panel, weight=1)
+
+        def force_sash_position(event=None):
+            try:
+                width = content_frame.winfo_width()
+                content_frame.sashpos(0, width // 2)
+                content_frame.unbind("<Configure>")
+            except Exception:
+                pass
+
+        content_frame.bind("<Configure>", force_sash_position)
+
+        self.scrollable_canvas = tk.Canvas(right_panel, borderwidth=0, highlightthickness=0)
+        v_scroll = ttk.Scrollbar(right_panel, orient=tk.VERTICAL, command=self.scrollable_canvas.yview)
+        h_scroll = ttk.Scrollbar(right_panel, orient=tk.HORIZONTAL, command=self.scrollable_canvas.xview)
+        self.scrollable_canvas.configure(yscrollcommand=v_scroll.set, xscrollcommand=h_scroll.set)
+
+        v_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        h_scroll.pack(side=tk.BOTTOM, fill=tk.X)
+        self.scrollable_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        self.graph_frame = ttk.Frame(self.scrollable_canvas)
+        self.scrollable_canvas.create_window((0, 0), window=self.graph_frame, anchor="nw")
+
+        self.canvas = FigureCanvasTkAgg(self.fig, master=self.graph_frame)
+        self.toolbar = NavigationToolbar2Tk(self.canvas, self.graph_frame)
+        self.toolbar.update()
+        self.toolbar.pack(side=tk.TOP, fill=tk.X)
+        self.canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.NONE, expand=False, padx=5, pady=5)
+
+        self.graph_frame.bind("<Configure>", self.on_graph_frame_configure)
+
+    @property
+    def df(self):
+        return self.data_mgr.raw_df
+
+    @df.setter
+    def df(self, dataframe):
+        self.data_mgr.raw_df = dataframe
+
+    @property
+    def data_file_path(self):
+        return self.data_mgr.file_path
+
+    @data_file_path.setter
+    def data_file_path(self, path):
+        self.data_mgr.file_path = path
+
+    def on_graph_frame_configure(self, event=None):
+        self.scrollable_canvas.configure(scrollregion=self.scrollable_canvas.bbox("all"))
+
+    def create_all_tk_variables(self):
+        self.plot_type_var = tk.StringVar(value="surface")
+        self.x_axis_var = tk.StringVar()
+        self.y_axis_var = tk.StringVar()
+        self.title_var = tk.StringVar()
+        self.xlabel_var = tk.StringVar()
+        self.ylabel_var = tk.StringVar()
+        self.zlabel_var = tk.StringVar()
+
+        self.y1_series_styles = {}
+        self.combined_style_target_var = tk.StringVar()
+
+        self.current_style_color_var = tk.StringVar(value="#000000")
+        self.current_style_linestyle_var = tk.StringVar(value="-")
+        self.current_style_marker_var = tk.StringVar(value="o")
+        self.current_style_linewidth_var = tk.DoubleVar(value=1.5)
+        self.current_style_markersize_var = tk.DoubleVar(value=6.0)
+        self.current_style_alpha_var = tk.DoubleVar(value=1.0)
+
+        self.grid_var = tk.BooleanVar(value=True)
+        self.marker_var = tk.BooleanVar(value=True)
+
+        self.font_family_var = tk.StringVar(value=self.font_list[0] if self.font_list else 'sans-serif')
+        self.title_fontsize_var = tk.DoubleVar(value=16.0)
+        self.xlabel_fontsize_var = tk.DoubleVar(value=14.0)
+        self.ylabel_fontsize_var = tk.DoubleVar(value=14.0)
+        self.zlabel_fontsize_var = tk.DoubleVar(value=14.0)
+        self.tick_fontsize_var = tk.DoubleVar(value=12.0)
+        self.legend_fontsize_var = tk.DoubleVar(value=12.0)
+        self.fig_width_var = tk.DoubleVar(value=7.0)
+        self.fig_height_var = tk.DoubleVar(value=6.0)
+
+        self.xlim_min_var = tk.StringVar()
+        self.xlim_max_var = tk.StringVar()
+        self.ylim_min_var = tk.StringVar()
+        self.ylim_max_var = tk.StringVar()
+        self.zlim_min_var = tk.StringVar()
+        self.zlim_max_var = tk.StringVar()
+
+        self.xtick_show_var = tk.BooleanVar(value=True)
+        self.ytick_show_var = tk.BooleanVar(value=True)
+        self.ztick_show_var = tk.BooleanVar(value=True)
+
+        self.spine_top_var = tk.BooleanVar(value=True)
+        self.spine_bottom_var = tk.BooleanVar(value=True)
+        self.spine_left_var = tk.BooleanVar(value=True)
+        self.spine_right_var = tk.BooleanVar(value=True)
+        self.face_color_var = tk.StringVar(value='#FFFFFF')
+        self.fig_color_var = tk.StringVar(value='#FFFFFF')
+
+        self.legend_show_var = tk.BooleanVar(value=False)
+        self.legend_loc_var = tk.StringVar(value='best')
+
+        self.x_log_scale_var = tk.BooleanVar(value=False)
+        self.y1_log_scale_var = tk.BooleanVar(value=False)
+        self.z_log_scale_var = tk.BooleanVar(value=False)
+
+        # 3D View Angle & Colormap
+        self.view_elev_var = tk.IntVar(value=30)
+        self.view_azim_var = tk.IntVar(value=-60)
+        self.mesh_resolution_var = tk.IntVar(value=50)
+        self.colormap_var = tk.StringVar(value="viridis")
+        self.export_dpi_var = tk.IntVar(value=150)
+
+    def setup_menu_bar(self):
+        menubar = tk.Menu(self)
+        self.config(menu=menubar)
+
+        file_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="File", menu=file_menu)
+        file_menu.add_command(label="Load Data (CSV/Excel)...", command=self.load_data)
+        file_menu.add_separator()
+        file_menu.add_command(label="Open Project...", command=self.load_settings, accelerator="Ctrl+O")
+        file_menu.add_command(label="Save Project", command=self.overwrite_save, accelerator="Ctrl+S")
+        file_menu.add_command(label="Save Project As...", command=self.save_settings)
+        file_menu.add_separator()
+        file_menu.add_command(label="Export Graph...", command=self.export_graph)
+        file_menu.add_separator()
+        file_menu.add_command(label="Open in 2D Mode...", command=self.open_in_2d_mode)
+        file_menu.add_separator()
+        file_menu.add_command(label="Exit", command=self.quit)
+
+        edit_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="Edit", menu=edit_menu)
+        edit_menu.add_command(label="Clear All", command=self.clear_all)
+        edit_menu.add_command(label="Reset Settings", command=self.reset_settings)
+
+        help_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="Help", menu=help_menu)
+        help_menu.add_command(label="About", command=self.show_about)
+
+    def setup_top_frame(self, parent):
+        top_frame = ttk.Frame(parent)
+        top_frame.pack(fill=tk.X, pady=(0, 5))
+
+        data_ops_frame = ttk.LabelFrame(top_frame, text="Data")
+        data_ops_frame.pack(side=tk.LEFT, padx=(0, 5))
+        self.load_button = ttk.Button(data_ops_frame, text="Load Data", command=self.load_data, width=12)
+        self.load_button.pack(side=tk.LEFT, padx=2, pady=2)
+        self.clear_button = ttk.Button(data_ops_frame, text="Clear All", command=self.clear_all, width=12)
+        self.clear_button.pack(side=tk.LEFT, padx=2, pady=2)
+
+        project_ops_frame = ttk.LabelFrame(top_frame, text="Project")
+        project_ops_frame.pack(side=tk.LEFT, padx=5)
+        self.load_settings_button = ttk.Button(project_ops_frame, text="Open", command=self.load_settings, width=10)
+        self.load_settings_button.pack(side=tk.LEFT, padx=2, pady=2)
+        self.overwrite_save_button = ttk.Button(project_ops_frame, text="Save", command=self.overwrite_save, width=10)
+        self.overwrite_save_button.pack(side=tk.LEFT, padx=2, pady=2)
+        self.overwrite_save_button['state'] = 'disabled'
+        self.save_settings_button = ttk.Button(project_ops_frame, text="Save As...", command=self.save_settings, width=10)
+        self.save_settings_button.pack(side=tk.LEFT, padx=2, pady=2)
+
+        export_ops_frame = ttk.LabelFrame(top_frame, text="Export")
+        export_ops_frame.pack(side=tk.LEFT, padx=(5, 0))
+        self.export_button = ttk.Button(export_ops_frame, text="Graph", command=self.export_graph, width=10)
+        self.export_button.pack(side=tk.LEFT, padx=2, pady=2)
+
+        self.bind('<Control-s>', lambda e: self.overwrite_save())
+        self.bind('<Control-o>', lambda e: self.load_settings())
+
+    def create_scrollable_tab(self, parent_notebook, tab_name, create_content_func):
+        tab_container = ttk.Frame(parent_notebook)
+        parent_notebook.add(tab_container, text=tab_name)
+
+        tab_canvas = tk.Canvas(tab_container, borderwidth=0, highlightthickness=0)
+        tab_scrollbar = ttk.Scrollbar(tab_container, orient=tk.VERTICAL, command=tab_canvas.yview)
+        tab_canvas.configure(yscrollcommand=tab_scrollbar.set)
+
+        tab_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        tab_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        content_frame = ttk.Frame(tab_canvas, padding=5)
+        canvas_window = tab_canvas.create_window((0, 0), window=content_frame, anchor="nw")
+
+        def on_content_configure(event):
+            tab_canvas.configure(scrollregion=tab_canvas.bbox("all"))
+
+        content_frame.bind("<Configure>", on_content_configure)
+
+        def _scroll_cb(scroll_units, event):
+            tab_canvas.yview_scroll(scroll_units, "units")
+
+        bind_scroll_events(tab_canvas, _scroll_cb)
+        create_content_func(content_frame)
+        bind_mousewheel_recursive(content_frame, _scroll_cb)
+        return content_frame
+
+    def create_basic_settings_tab(self, frame):
+        top_frame = ttk.Frame(frame)
+        top_frame.pack(fill=tk.X, pady=2)
+
+        ttk.Label(top_frame, text="3D Plot Title:").grid(row=0, column=0, padx=3, pady=2, sticky=tk.W)
+        self.title_entry = ttk.Entry(top_frame, textvariable=self.title_var, width=25)
+        self.title_entry.grid(row=0, column=1, columnspan=3, padx=3, pady=2, sticky=tk.EW)
+
+        ttk.Label(top_frame, text="3D Plot Type:").grid(row=1, column=0, padx=3, pady=2, sticky=tk.W)
+        self.plot_type_combo = ttk.Combobox(
+            top_frame, textvariable=self.plot_type_var,
+            values=["surface", "wireframe", "scatter3d", "line3d", "contour3d"], state='readonly', width=22
+        )
+        self.plot_type_combo.grid(row=1, column=1, columnspan=3, padx=3, pady=2, sticky=tk.EW)
+
+        # Axes selections
+        axes_frame = ttk.LabelFrame(frame, text="3D Coordinates Selection")
+        axes_frame.pack(fill=tk.X, padx=2, pady=5)
+
+        ttk.Label(axes_frame, text="X-Axis Data:").grid(row=0, column=0, padx=2, pady=2, sticky=tk.W)
+        self.x_axis_combo = ttk.Combobox(axes_frame, textvariable=self.x_axis_var, state='disabled', width=20)
+        self.x_axis_combo.grid(row=0, column=1, padx=2, pady=2, sticky=tk.EW)
+
+        ttk.Label(axes_frame, text="Y-Axis Data:").grid(row=1, column=0, padx=2, pady=2, sticky=tk.W)
+        self.y_axis_combo = ttk.Combobox(axes_frame, textvariable=self.y_axis_var, state='disabled', width=20)
+        self.y_axis_combo.grid(row=1, column=1, padx=2, pady=2, sticky=tk.EW)
+
+        ttk.Label(axes_frame, text="Z-Axis Data (Multi-select):").grid(row=2, column=0, columnspan=2, padx=2, pady=2, sticky=tk.W)
+        z_list_frame = ttk.Frame(axes_frame, height=80)
+        z_scroll = ttk.Scrollbar(z_list_frame, orient=tk.VERTICAL)
+        self.y_listbox = tk.Listbox(z_list_frame, selectmode=tk.MULTIPLE, yscrollcommand=z_scroll.set, exportselection=False, height=4)
+        z_scroll.config(command=self.y_listbox.yview)
+        z_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        self.y_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        z_list_frame.grid(row=3, column=0, columnspan=2, padx=2, pady=2, sticky=tk.EW)
+
+    def create_style_settings_tab(self, frame):
+        mesh_frame = ttk.LabelFrame(frame, text="3D Mesh & Colormap Options")
+        mesh_frame.pack(fill=tk.X, padx=2, pady=2)
+
+        ttk.Label(mesh_frame, text="Mesh Resolution:").grid(row=0, column=0, padx=2, pady=2, sticky=tk.W)
+        self.mesh_spin = ttk.Spinbox(mesh_frame, from_=10, to=200, increment=10, textvariable=self.mesh_resolution_var, width=8)
+        self.mesh_spin.grid(row=0, column=1, padx=2, pady=2)
+
+        ttk.Label(mesh_frame, text="Colormap:").grid(row=0, column=2, padx=5, pady=2, sticky=tk.W)
+        self.cmap_combo = ttk.Combobox(
+            mesh_frame, textvariable=self.colormap_var,
+            values=['viridis', 'plasma', 'inferno', 'magma', 'coolwarm', 'jet', 'rainbow'], state='readonly', width=12
+        )
+        self.cmap_combo.grid(row=0, column=3, padx=2, pady=2)
+
+    def create_font_size_tab(self, frame):
+        ttk.Label(frame, text="Font Family:").grid(row=0, column=0, padx=2, pady=1, sticky=tk.W)
+        self.font_family_combo = ttk.Combobox(frame, textvariable=self.font_family_var, values=self.font_list, state='readonly', width=18)
+        self.font_family_combo.grid(row=0, column=1, columnspan=2, padx=2, pady=1, sticky=tk.W)
+
+    def create_axis_ticks_tab(self, frame):
+        ttk.Label(frame, text="3D Axis Limits", font=("-weight bold")).grid(row=0, column=0, sticky=tk.W, pady=3)
+
+    def create_spines_tab(self, frame):
+        ttk.Label(frame, text="3D Background Colors").pack(anchor=tk.W, pady=2)
+
+    def create_legend_tab(self, frame):
+        self.legend_show_check = ttk.Checkbutton(frame, text="Show 3D Legend", variable=self.legend_show_var)
+        self.legend_show_check.pack(anchor=tk.W, pady=2)
+
+    def create_advanced_tab(self, frame):
+        view_frame = ttk.LabelFrame(frame, text="3D Camera View Angles")
+        view_frame.pack(fill=tk.X, padx=2, pady=5)
+
+        ttk.Label(view_frame, text="Elevation (-90? to 90?):").grid(row=0, column=0, padx=2, pady=2, sticky=tk.W)
+        self.elev_spin = ttk.Spinbox(view_frame, from_=-90, to=90, increment=5, textvariable=self.view_elev_var, width=8)
+        self.elev_spin.grid(row=0, column=1, padx=2, pady=2)
+
+        ttk.Label(view_frame, text="Azimuth (-180? to 180?):").grid(row=0, column=2, padx=5, pady=2, sticky=tk.W)
+        self.azim_spin = ttk.Spinbox(view_frame, from_=-180, to=180, increment=5, textvariable=self.view_azim_var, width=8)
+        self.azim_spin.grid(row=0, column=3, padx=2, pady=2)
+
+    def load_data(self, file_path=None):
+        if file_path is None:
+            file_path = filedialog.askopenfilename(
+                title="Select Data File",
+                filetypes=[("CSV files", "*.csv"), ("Excel files", "*.xlsx *.xls"), ("All files", "*.*")]
+            )
+        if not file_path:
+            return
+
+        try:
+            self.data_mgr.load_file(file_path)
+        except Exception as e:
+            messagebox.showerror("Load Error", f"Failed to read file:\n{e}")
+            return
+
+        if self.sheet:
+            self.sheet.destroy()
+
+        self.sheet = Sheet(
+            self.sheet_frame,
+            data=self.df.values.tolist(),
+            headers=self.df.columns.tolist(),
+            show_toolbar=True,
+            show_top_left=True
+        )
+        self.sheet.enable_bindings()
+        self.sheet.pack(fill=tk.BOTH, expand=True)
+
+        self.update_plot_options()
+
+    def update_plot_options(self):
+        if self.df is None:
+            return
+
+        cols = self.data_mgr.get_columns()
+        self.x_axis_combo['values'] = cols
+        self.x_axis_combo['state'] = 'readonly'
+        self.y_axis_combo['values'] = cols
+        self.y_axis_combo['state'] = 'readonly'
+
+        self.y_listbox.delete(0, tk.END)
+        for c in cols:
+            self.y_listbox.insert(tk.END, c)
+
+        self.plot_button['state'] = 'normal'
+        self.export_button['state'] = 'normal'
+
+        if cols:
+            self.x_axis_var.set(cols[0])
+            if len(cols) > 1:
+                self.y_axis_var.set(cols[1])
+            if len(cols) > 2:
+                self.y_listbox.select_set(2)
+
+    def get_data_from_sheet(self):
+        if not self.sheet or self.df is None:
+            return
+        try:
+            data = self.sheet.get_sheet_data() if hasattr(self.sheet, 'get_sheet_data') else getattr(self.sheet, 'data', None)
+            headers = self.sheet.get_headers() if hasattr(self.sheet, 'get_headers') else getattr(self.sheet, 'headers', None)
+            if callable(headers):
+                headers = headers()
+            self.data_mgr.update_from_sheet_data(data, headers)
+        except Exception as e:
+            print(f"Sheet retrieval error: {e}")
+
+    def plot_graph(self):
+        try:
+            self.fig.clear()
+            self.ax = self.fig.add_subplot(111, projection='3d')
+            self.canvas.draw()
+        except Exception as e:
+            messagebox.showerror("Internal Error", f"Failed to clear 3D graph:\n{e}")
+            return
+
+        self.get_data_from_sheet()
+        if not self.data_mgr.has_data():
+            messagebox.showinfo("Info", "No data to plot.")
+            return
+
+        x_col = self.x_axis_var.get()
+        y_col = self.y_axis_var.get()
+        z_cols = [self.y_listbox.get(i) for i in self.y_listbox.curselection()]
+
+        if not x_col or not y_col or not z_cols:
+            messagebox.showerror("Error", "Please select X, Y, and at least one Z column.")
+            return
+
+        try:
+            self.ax.view_init(elev=self.view_elev_var.get(), azim=self.view_azim_var.get())
+
+            x_num = pd.to_numeric(self.df[x_col].astype(str).str.replace(r'[^\d.-]', '', regex=True), errors='coerce')
+            y_num = pd.to_numeric(self.df[y_col].astype(str).str.replace(r'[^\d.-]', '', regex=True), errors='coerce')
+
+            plot_type = self.plot_type_var.get()
+
+            for z_c in z_cols:
+                z_num = pd.to_numeric(self.df[z_c].astype(str).str.replace(r'[^\d.-]', '', regex=True), errors='coerce')
+                valid_df = pd.DataFrame({'x': x_num, 'y': y_num, 'z': z_num}).dropna()
+
+                if valid_df.empty:
+                    continue
+
+                if plot_type in ["surface", "wireframe", "contour3d"]:
+                    res = self.mesh_resolution_var.get()
+                    xi = np.linspace(valid_df['x'].min(), valid_df['x'].max(), res)
+                    yi = np.linspace(valid_df['y'].min(), valid_df['y'].max(), res)
+                    Xi, Yi = np.meshgrid(xi, yi)
+                    Zi = griddata((valid_df['x'].values, valid_df['y'].values), valid_df['z'].values, (Xi, Yi), method='linear')
+                    Zi = np.nan_to_num(Zi, nan=np.nanmean(valid_df['z'].values))
+
+                    if plot_type == "surface":
+                        self.ax.plot_surface(Xi, Yi, Zi, cmap=self.colormap_var.get(), alpha=0.8)
+                    elif plot_type == "wireframe":
+                        self.ax.plot_wireframe(Xi, Yi, Zi, rstride=5, cstride=5)
+                    elif plot_type == "contour3d":
+                        self.ax.contour3D(Xi, Yi, Zi, 20, cmap=self.colormap_var.get())
+
+                elif plot_type == "scatter3d":
+                    self.ax.scatter(valid_df['x'], valid_df['y'], valid_df['z'], label=z_c)
+                elif plot_type == "line3d":
+                    self.ax.plot(valid_df['x'], valid_df['y'], valid_df['z'], label=z_c)
+
+            self.ax.set_xlabel(x_col)
+            self.ax.set_ylabel(y_col)
+            self.ax.set_zlabel(", ".join(z_cols))
+            if self.title_var.get():
+                self.ax.set_title(self.title_var.get())
+
+            self.canvas.draw()
+        except Exception as e:
+            messagebox.showerror("Plot Error", f"Failed to plot 3D graph:\n{e}")
+
+    def save_settings(self):
+        file_path = filedialog.asksaveasfilename(
+            title="Save 3D Project",
+            filetypes=[("Matplotlib Graph Project", "*.pmggrp")],
+            defaultextension=".pmggrp"
+        )
+        if not file_path:
+            return
+        save_project_file(self, file_path, version_str=VERSION, dimension="3D")
+        self.current_project_path = file_path
+        self.overwrite_save_button['state'] = 'normal'
+        messagebox.showinfo("Success", f"Project saved to {file_path}.")
+
+    def overwrite_save(self):
+        if not self.current_project_path:
+            self.save_settings()
+            return
+        save_project_file(self, self.current_project_path, version_str=VERSION, dimension="3D")
+        messagebox.showinfo("Success", f"Project saved to {self.current_project_path}.")
+
+    def load_settings(self):
+        file_path = filedialog.askopenfilename(
+            title="Select Project File",
+            filetypes=[("Matplotlib Graph Project", "*.pmggrp")]
+        )
+        if not file_path:
+            return
+        self.load_project_file(file_path)
+
+    def export_graph(self):
+        file_path = filedialog.asksaveasfilename(
+            title="Save 3D Graph",
+            filetypes=[("PNG files", "*.png"), ("PDF files", "*.pdf"), ("SVG files", "*.svg")],
+            defaultextension=".png"
+        )
+        if file_path:
+            self.fig.savefig(file_path, dpi=self.export_dpi_var.get(), bbox_inches='tight')
+            messagebox.showinfo("Success", f"Graph saved to {file_path}.")
+
+    def clear_all(self):
+        self.data_mgr.clear()
+        if self.sheet:
+            self.sheet.destroy()
+            self.sheet = None
+        self.fig.clear()
+        self.ax = self.fig.add_subplot(111, projection='3d')
+        self.canvas.draw()
+
+    def reset_settings(self):
+        self.plot_type_var.set("surface")
+        self.view_elev_var.set(30)
+        self.view_azim_var.set(-60)
+
+    def setup_drag_and_drop(self):
+        if DND_AVAILABLE:
+            try:
+                from tkinterdnd2 import DND_FILES
+                self.drop_target_register(DND_FILES)
+                self.dnd_bind('<<Drop>>', self.on_drop)
+            except Exception as e:
+                print(f"DnD error: {e}")
+
+    def on_drop(self, event):
+        files = getattr(event, 'data', '')
+        if files:
+            file_path = str(files).strip('{}').strip()
+            ext = os.path.splitext(file_path)[1].lower()
+            if ext == '.pmggrp':
+                self.load_project_file(file_path)
+            elif ext in ['.csv', '.xlsx', '.xls']:
+                self.load_data(file_path=file_path)
+
+    def load_project_file(self, file_path):
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                settings = json.load(f)
+            if 'edited_data' in settings and settings['edited_data']:
+                d = settings['edited_data']
+                self.df = pd.DataFrame(d['data'], columns=d['columns']).astype(str).fillna("")
+                if self.sheet:
+                    self.sheet.destroy()
+                self.sheet = Sheet(self.sheet_frame, data=self.df.values.tolist(), headers=self.df.columns.tolist())
+                self.sheet.enable_bindings()
+                self.sheet.pack(fill=tk.BOTH, expand=True)
+                self.update_plot_options()
+
+            self.current_project_path = file_path
+            self.overwrite_save_button['state'] = 'normal'
+            if self.df is not None:
+                self.plot_graph()
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to load project file:\n{e}")
+
+    def open_in_2d_mode(self):
+        import subprocess
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        main_path = os.path.join(script_dir, "main.py")
+        cmd = [sys.executable, main_path]
+        if self.current_project_path and os.path.exists(self.current_project_path):
+            cmd.append(self.current_project_path)
+        subprocess.Popen(cmd)
+
+    def show_about(self):
+        messagebox.showinfo("About HYGrapher 3D", f"HYGrapher 3D ver. {VERSION}\n3D Data Visualization Tool.")
+
+
+def main():
+    app = GraphApp()
+    if len(sys.argv) > 1:
+        file_path = sys.argv[1]
+        if os.path.exists(file_path):
+            app.after(100, lambda: app.load_project_file(file_path))
+    app.mainloop()
+
+
+if __name__ == "__main__":
+    main()

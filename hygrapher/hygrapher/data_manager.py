@@ -33,6 +33,13 @@ class DataManager:
     def has_data(self):
         return self._raw_df is not None and not self._raw_df.empty
 
+    def set_dataframe(self, df):
+        """
+        Directly update the raw dataframe.
+        """
+        self._raw_df = df
+        return self._raw_df
+
     def load_file(self, file_path):
         """
         Load data from a CSV or Excel file into a string DataFrame.

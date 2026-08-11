@@ -202,3 +202,30 @@ def save_project_file(app, file_path, version_str="0.6.0", dimension="2D"):
     with open(file_path, 'w', encoding='utf-8') as f:
         json.dump(settings, f, indent=4)
     return settings
+
+
+def load_project_file(app, file_path):
+    """
+    Load project JSON file and restore app data.
+    """
+    with open(file_path, 'r', encoding='utf-8') as f:
+        settings = json.load(f)
+
+    edited_data = settings.get("edited_data")
+    if edited_data and isinstance(edited_data, dict):
+        cols = edited_data.get("columns", [])
+        rows = edited_data.get("data", [])
+        if cols and rows:
+            import pandas as pd
+            df = pd.DataFrame(rows, columns=cols)
+            app.data_mgr.set_dataframe(df)
+            app.df = df
+            if hasattr(app, 'populate_data_table'):
+                app.populate_data_table()
+            if hasattr(app, 'update_plot_options'):
+                app.update_plot_options()
+            elif hasattr(app, 'update_combos'):
+                app.update_combos()
+
+    return settings
+
