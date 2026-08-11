@@ -41,10 +41,10 @@ from matplotlib.figure import Figure
 
 from hygrapher.data_manager import DataManager
 from hygrapher.project_io import save_project_file, load_project_file
-from hygrapher.utils import resolve_cli_file
+from hygrapher.utils import get_app_version, resolve_cli_file
 from hygrapher.import_dialog import ImportPreviewDialog
 
-VERSION = "0.6.0"
+VERSION = get_app_version()
 
 
 class GraphApp3D(QMainWindow):

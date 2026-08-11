@@ -114,12 +114,12 @@ pytest -v --cov=hygrapher
 ### Build & Release Workflow
 The repository includes automated GitHub Actions CI/CD (`.github/workflows/ci.yml`):
 - Runs unit tests and coverage across Linux, macOS, and Windows matrix.
-- **Automated PyPI Publishing**: Pushing any tag matching `v*` (e.g. `v0.6.0`) automatically builds wheels and publishes the release package to PyPI.
+- **Automated PyPI Publishing**: Pushing any tag matching `v*` (e.g. `v0.7.0`) automatically builds wheels and publishes the release package to PyPI.
 
 ```bash
 # Release a new version:
-git tag v0.6.0
-git push origin v0.6.0
+git tag v0.7.0
+git push origin v0.7.0
 ```
 
 ---

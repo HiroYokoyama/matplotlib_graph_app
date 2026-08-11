@@ -14,6 +14,8 @@ setting.
 import json
 from datetime import datetime
 
+from hygrapher.utils import get_app_version
+
 # (settings_key, widget_attr, kind, default)
 # kind: "text" (QLineEdit), "check" (QCheckBox), "int" (QSpinBox),
 #       "float" (QDoubleSpinBox), "combo" (QComboBox by text)
@@ -132,10 +134,13 @@ def _spec_for(dimension):
     return _FIELD_SPEC_3D if dimension == "3D" else _FIELD_SPEC
 
 
-def build_project_dict(app, version_str="0.6.0", dimension="2D"):
+def build_project_dict(app, version_str=None, dimension="2D"):
     """
     Consolidate application state into a project dictionary for .pmggrp export.
     """
+    if version_str is None:
+        version_str = get_app_version()
+
     if hasattr(app, "get_data_from_table"):
         try:
             app.get_data_from_table()
@@ -177,7 +182,7 @@ def build_project_dict(app, version_str="0.6.0", dimension="2D"):
     return settings
 
 
-def save_project_file(app, file_path, version_str="0.6.0", dimension="2D"):
+def save_project_file(app, file_path, version_str=None, dimension="2D"):
     """
     Save current app state to a JSON file.
     """

@@ -7,9 +7,24 @@ formatting, and font detection.
 """
 
 import os
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as _pkg_version
 
 import matplotlib.font_manager as fm
 import matplotlib.ticker as ticker
+
+
+def get_app_version():
+    """
+    HyGrapher's version number, read from installed package metadata (which
+    setuptools generates from pyproject.toml's [project] version field).
+    pyproject.toml is the single source of truth — bump the version there
+    only; everything else asks this function instead of hardcoding a copy.
+    """
+    try:
+        return _pkg_version("hygrapher")
+    except PackageNotFoundError:
+        return "0.0.0-dev"
 
 
 def resolve_cli_file(argv):
