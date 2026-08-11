@@ -41,6 +41,12 @@ _FIELD_SPEC = [
     ("xtick_major_interval", "xtick_major_interval_input", "text", ""),
     ("ytick_major_interval", "ytick_major_interval_input", "text", ""),
     ("ytick2_major_interval", "ytick2_major_interval_input", "text", ""),
+    ("xtick_minor_show", "xtick_minor_check", "check", False),
+    ("xtick_minor_interval", "xtick_minor_interval_input", "text", ""),
+    ("ytick_minor_show", "ytick_minor_check", "check", False),
+    ("ytick_minor_interval", "ytick_minor_interval_input", "text", ""),
+    ("ytick2_minor_show", "ytick2_minor_check", "check", False),
+    ("ytick2_minor_interval", "ytick2_minor_interval_input", "text", ""),
     ("rotate_labels", "rotate_labels_check", "check", False),
     ("rotation_angle", "rotation_angle_spin", "int", 45),
     ("xaxis_plain_format", "xaxis_plain_check", "check", False),
@@ -132,6 +138,16 @@ def _set_field(app, attr, kind, value):
 
 def _spec_for(dimension):
     return _FIELD_SPEC_3D if dimension == "3D" else _FIELD_SPEC
+
+
+def reset_to_defaults(app, dimension="2D"):
+    """
+    Reset every widget named in the field spec back to its factory default.
+    Used by "Reset All" so it actually resets everything the UI exposes,
+    instead of the handful of fields each window used to reset by hand.
+    """
+    for _key, attr, kind, default in _spec_for(dimension):
+        _set_field(app, attr, kind, default)
 
 
 def build_project_dict(app, version_str=None, dimension="2D"):

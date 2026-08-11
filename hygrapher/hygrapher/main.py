@@ -37,7 +37,7 @@ from PyQt6.QtWidgets import (
     QDialog,
 )
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QAction, QDropEvent, QDragEnterEvent
+from PyQt6.QtGui import QAction, QDropEvent, QDragEnterEvent, QKeySequence, QUndoStack
 
 import matplotlib
 
@@ -46,14 +46,16 @@ from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg, NavigationToolb
 from matplotlib.figure import Figure
 
 from hygrapher.data_manager import DataManager
-from hygrapher.project_io import save_project_file, load_project_file
+from hygrapher.project_io import save_project_file, load_project_file, reset_to_defaults
 from hygrapher.utils import (
     apply_major_ticker,
+    apply_minor_ticker,
     get_app_version,
     get_font_list,
     resolve_cli_file,
 )
 from hygrapher.import_dialog import ImportPreviewDialog
+from hygrapher.table_undo import handle_table_item_changed, snapshot_table
 
 VERSION = get_app_version()
 
@@ -61,7 +63,6 @@ VERSION = get_app_version()
 class GraphApp(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle(f"Matplotlib Graph App v{VERSION} (PyQt6)")
         self.resize(1400, 900)
         self.setMinimumSize(1000, 650)
         self.setAcceptDrops(True)
@@ -74,7 +75,12 @@ class GraphApp(QMainWindow):
         self.y1_series_styles = {}
         self.y2_series_styles = {}
 
+        self.undo_stack = QUndoStack(self)
+        self.undo_stack.cleanChanged.connect(self.update_window_title)
+        self._table_snapshot = {}
+
         self.init_ui()
+        self.update_window_title()
 
     def init_ui(self):
         # Menu Bar
@@ -108,6 +114,15 @@ class GraphApp(QMainWindow):
         export_data_action = QAction("Export Filtered Data...", self)
         export_data_action.triggered.connect(self.export_filtered_data)
         file_menu.addAction(export_data_action)
+
+        edit_menu = menu_bar.addMenu("Edit")
+        undo_action = self.undo_stack.createUndoAction(self, "Undo")
+        undo_action.setShortcut(QKeySequence.StandardKey.Undo)
+        edit_menu.addAction(undo_action)
+
+        redo_action = self.undo_stack.createRedoAction(self, "Redo")
+        redo_action.setShortcut(QKeySequence.StandardKey.Redo)
+        edit_menu.addAction(redo_action)
 
         mode_menu = menu_bar.addMenu("Mode")
         mode_3d_action = QAction("Switch to 3D Plotter Mode", self)
@@ -173,6 +188,7 @@ class GraphApp(QMainWindow):
         self.data_group = QGroupBox("Data Sheet View")
         data_layout = QVBoxLayout(self.data_group)
         self.data_table = QTableWidget()
+        self.data_table.itemChanged.connect(self.on_table_item_changed)
         data_layout.addWidget(self.data_table)
         left_layout.addWidget(self.data_group, stretch=2)
 
@@ -438,6 +454,18 @@ class GraphApp(QMainWindow):
         layout.addRow("Y1 Major Tick Interval:", self.ytick_major_interval_input)
         layout.addRow("Y2 Major Tick Interval:", self.ytick2_major_interval_input)
 
+        self.xtick_minor_check = QCheckBox("Show X Minor Ticks")
+        self.xtick_minor_interval_input = QLineEdit()
+        layout.addRow(self.xtick_minor_check, self.xtick_minor_interval_input)
+
+        self.ytick_minor_check = QCheckBox("Show Y1 Minor Ticks")
+        self.ytick_minor_interval_input = QLineEdit()
+        layout.addRow(self.ytick_minor_check, self.ytick_minor_interval_input)
+
+        self.ytick2_minor_check = QCheckBox("Show Y2 Minor Ticks")
+        self.ytick2_minor_interval_input = QLineEdit()
+        layout.addRow(self.ytick2_minor_check, self.ytick2_minor_interval_input)
+
         self.rotate_labels_check = QCheckBox("Rotate X-Tick Labels")
         self.rotation_angle_spin = QSpinBox()
         self.rotation_angle_spin.setRange(0, 360)
@@ -680,6 +708,7 @@ class GraphApp(QMainWindow):
         if self.df is None:
             return
 
+        self.data_table.blockSignals(True)
         self.data_table.setRowCount(len(self.df))
         self.data_table.setColumnCount(len(self.df.columns))
         self.data_table.setHorizontalHeaderLabels(list(self.df.columns))
@@ -689,6 +718,17 @@ class GraphApp(QMainWindow):
                 val = str(self.df.iat[row, col])
                 item = QTableWidgetItem(val)
                 self.data_table.setItem(row, col, item)
+        self.data_table.blockSignals(False)
+
+        # A freshly (re)populated table is a new document as far as undo
+        # history and cell-edit tracking are concerned.
+        self._table_snapshot = snapshot_table(self.data_table)
+        self.undo_stack.clear()
+
+    def on_table_item_changed(self, item):
+        handle_table_item_changed(
+            item, self.data_table, self._table_snapshot, self.undo_stack
+        )
 
     def get_data_from_table(self):
         if self.df is None or self.data_table.rowCount() == 0:
@@ -1302,6 +1342,26 @@ class GraphApp(QMainWindow):
                 self.y2_log_check.isChecked(),
             )
 
+        apply_minor_ticker(
+            self.ax.xaxis,
+            self.xtick_minor_check.isChecked(),
+            self.xtick_minor_interval_input.text(),
+            self.x_log_check.isChecked(),
+        )
+        apply_minor_ticker(
+            self.ax.yaxis,
+            self.ytick_minor_check.isChecked(),
+            self.ytick_minor_interval_input.text(),
+            self.y1_log_check.isChecked(),
+        )
+        if self.ax2:
+            apply_minor_ticker(
+                self.ax2.yaxis,
+                self.ytick2_minor_check.isChecked(),
+                self.ytick2_minor_interval_input.text(),
+                self.y2_log_check.isChecked(),
+            )
+
         if self.grid_check.isChecked():
             self.ax.grid(
                 True,
@@ -1355,6 +1415,8 @@ class GraphApp(QMainWindow):
         if file_path:
             save_project_file(self, file_path, version_str=VERSION, dimension="2D")
             self.current_project_path = file_path
+            self.undo_stack.setClean()
+            self.update_window_title()
 
     def overwrite_save(self):
         if not self.current_project_path:
@@ -1363,6 +1425,8 @@ class GraphApp(QMainWindow):
             save_project_file(
                 self, self.current_project_path, version_str=VERSION, dimension="2D"
             )
+            self.undo_stack.setClean()
+            self.update_window_title()
 
     def load_settings(self):
         file_path, _ = QFileDialog.getOpenFileName(
@@ -1374,6 +1438,8 @@ class GraphApp(QMainWindow):
     def load_project_file(self, file_path):
         load_project_file(self, file_path)
         self.current_project_path = file_path
+        self.undo_stack.setClean()
+        self.update_window_title()
 
     def export_graph(self):
         file_path, _ = QFileDialog.getSaveFileName(
@@ -1413,17 +1479,25 @@ class GraphApp(QMainWindow):
         self.data_table.clear()
         self.data_table.setRowCount(0)
         self.data_table.setColumnCount(0)
+        self._table_snapshot = {}
+        self.undo_stack.clear()
+
+        for info in self.x_tab_widgets:
+            info["x_combo"].clear()
+            info["y1_listbox"].clear()
+            info["y2_listbox"].clear()
+        self.combined_style_target_combo.clear()
+        self.errorbar_column_combo.clear()
+        self.filter_column_combo.clear()
+
         self.fig.clear()
         self.ax = self.fig.add_subplot(111)
         self.canvas.draw()
 
     def reset_settings(self):
-        self.plot_type_combo.setCurrentIndex(0)
-        self.title_input.clear()
-        self.xlabel_input.clear()
-        self.ylabel_input.clear()
-        self.ylabel2_input.clear()
-        self.grid_check.setChecked(True)
+        reset_to_defaults(self, dimension="2D")
+        self.y1_series_styles = {}
+        self.y2_series_styles = {}
         self.clear_all()
 
     def open_in_3d_mode(self):
@@ -1434,6 +1508,15 @@ class GraphApp(QMainWindow):
             self.win_3d.show()
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to open 3D Mode:\n{e}")
+
+    def update_window_title(self):
+        base = f"HyGrapher v{VERSION}"
+        if self.current_project_path:
+            name = os.path.basename(self.current_project_path)
+            base = f"{name} - {base}"
+        if not self.undo_stack.isClean():
+            base = f"*{base}"
+        self.setWindowTitle(base)
 
     def show_about(self):
         QMessageBox.about(

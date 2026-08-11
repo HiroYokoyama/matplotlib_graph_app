@@ -386,16 +386,174 @@ def test_2d_import_cancelled_dialog_does_not_load(app2d, tmp_path, monkeypatch):
     assert app2d.df is None
 
 
+# ── Undo/Redo Tests ───────────────────────────────────────────────────────────
+def test_2d_undo_redo_cell_edit(app2d):
+    app2d.undo_stack.clear()
+    item = app2d.data_table.item(0, 1)
+    original_text = item.text()
+
+    item.setText("999")
+    assert app2d.undo_stack.count() == 1
+    assert app2d.data_table.item(0, 1).text() == "999"
+
+    app2d.undo_stack.undo()
+    assert app2d.data_table.item(0, 1).text() == original_text
+
+    app2d.undo_stack.redo()
+    assert app2d.data_table.item(0, 1).text() == "999"
+
+    app2d.undo_stack.undo()  # restore for later tests in this module
+
+
+def test_2d_undo_does_not_record_noop_edits(app2d):
+    """Re-committing the same text (e.g. clicking into a cell and pressing
+    Enter without changing anything) shouldn't create undo history."""
+    app2d.undo_stack.clear()
+    item = app2d.data_table.item(0, 0)
+    item.setText(item.text())
+    assert app2d.undo_stack.count() == 0
+
+
+def test_3d_undo_redo_cell_edit(app3d):
+    app3d.undo_stack.clear()
+    item = app3d.data_table.item(0, 0)
+    original_text = item.text()
+
+    item.setText("42")
+    assert app3d.undo_stack.count() == 1
+
+    app3d.undo_stack.undo()
+    assert app3d.data_table.item(0, 0).text() == original_text
+    app3d.undo_stack.redo()
+    assert app3d.data_table.item(0, 0).text() == "42"
+    app3d.undo_stack.undo()
+
+
+# ── Window Title Tests ───────────────────────────────────────────────────────
+def test_2d_window_title_shows_unsaved_marker_after_edit(app2d):
+    app2d.undo_stack.clear()
+    app2d.update_window_title()
+    assert "*" not in app2d.windowTitle()
+
+    item = app2d.data_table.item(0, 0)
+    old_text = item.text()
+    item.setText(old_text + "_edited")
+    assert "*" in app2d.windowTitle()
+
+    app2d.undo_stack.undo()
+    assert "*" not in app2d.windowTitle()
+
+
+def test_2d_window_title_updates_on_project_save_and_load(tmp_path):
+    app = GraphApp2D()
+    try:
+        assert app.current_project_path is None
+        assert "HyGrapher" in app.windowTitle()
+
+        proj_path = tmp_path / "titled_project.pmggrp"
+        app.current_project_path = str(proj_path)
+        app.overwrite_save()
+        assert proj_path.name in app.windowTitle()
+        assert "*" not in app.windowTitle()
+
+        app.current_project_path = None
+        app.load_project_file(str(proj_path))
+        assert proj_path.name in app.windowTitle()
+        assert app.current_project_path == str(proj_path)
+    finally:
+        app.close()
+        app.deleteLater()
+        QApplication.processEvents()
+
+
+def test_3d_window_title_updates_on_project_save_and_load(tmp_path):
+    app = GraphApp3D()
+    try:
+        assert app.current_project_path is None
+        assert "HyGrapher" in app.windowTitle()
+
+        proj_path = tmp_path / "titled_3d_project.pmggrp"
+        app.current_project_path = str(proj_path)
+        app.overwrite_save()
+        assert proj_path.name in app.windowTitle()
+
+        app.current_project_path = None
+        app.load_project_file(str(proj_path))
+        assert proj_path.name in app.windowTitle()
+    finally:
+        app.close()
+        app.deleteLater()
+        QApplication.processEvents()
+
+
+# ── Minor Tick Tests ─────────────────────────────────────────────────────────
+def test_2d_minor_tick_interval_applies(app2d):
+    import matplotlib.ticker as mticker
+
+    app2d.plot_type_combo.setCurrentIndex(app2d.plot_type_combo.findText("line"))
+    app2d.x_log_check.setChecked(False)
+    app2d.xtick_minor_check.setChecked(True)
+    app2d.xtick_minor_interval_input.setText("0.5")
+    app2d.plot_graph()
+
+    assert isinstance(app2d.ax.xaxis.get_minor_locator(), mticker.MultipleLocator)
+
+    app2d.xtick_minor_check.setChecked(False)
+    app2d.xtick_minor_interval_input.setText("")
+    app2d.plot_graph()
+
+
+# ── clear_all Tests ──────────────────────────────────────────────────────────
+def test_2d_clear_all_clears_stale_column_selectors(app2d):
+    assert app2d.x_tab_widgets[0]["x_combo"].count() > 0
+    assert app2d.errorbar_column_combo.count() > 0
+
+    app2d.clear_all()
+
+    assert app2d.x_tab_widgets[0]["x_combo"].count() == 0
+    assert app2d.x_tab_widgets[0]["y1_listbox"].count() == 0
+    assert app2d.errorbar_column_combo.count() == 0
+    assert app2d.filter_column_combo.count() == 0
+
+
+def test_3d_clear_all_clears_stale_column_selectors(app3d):
+    assert app3d.x_axis_combo.count() > 0
+
+    app3d.clear_all()
+
+    assert app3d.x_axis_combo.count() == 0
+    assert app3d.y_axis_combo.count() == 0
+    assert app3d.z_listbox.count() == 0
+
+
 # ── Reset & Clear All Tests ──────────────────────────────────────────────────
 def test_2d_reset_and_clear(app2d):
     app2d.title_input.setText("Some Title")
+    app2d.ylabel2_input.setText("Y2 label")
+    app2d.spine_top_check.setChecked(False)
+    app2d.x_log_check.setChecked(True)
+    app2d.colormap_combo.setCurrentIndex(app2d.colormap_combo.findText("jet"))
+    app2d.y1_series_styles["(Y1) Val1"] = {"color": "#ff0000"}
+
     app2d.reset_settings()
+
     assert app2d.title_input.text() == ""
+    assert app2d.ylabel2_input.text() == ""
+    assert app2d.spine_top_check.isChecked() is True
+    assert app2d.x_log_check.isChecked() is False
+    assert app2d.colormap_combo.currentText() == "viridis"
+    assert app2d.y1_series_styles == {}
     assert app2d.df is None
 
 
 def test_3d_reset_and_clear(app3d):
     app3d.elev_spin.setValue(45)
+    app3d.title_input.setText("Some Title")
+    app3d.colormap_combo.setCurrentIndex(app3d.colormap_combo.findText("jet"))
+
     app3d.reset_settings()
+
     assert app3d.elev_spin.value() == 30
+    assert app3d.title_input.text() == ""
+    assert app3d.colormap_combo.currentText() == "viridis"
     assert app3d.df is None

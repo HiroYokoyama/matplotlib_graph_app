@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+import pandas as pd
+
 from hygrapher.data_manager import DataManager
 
 
@@ -73,7 +75,6 @@ def test_data_manager_load_json(tmp_path):
 def test_data_manager_load_xlsx(tmp_path):
     dm = DataManager()
     xlsx_file = tmp_path / "test_data.xlsx"
-    import pandas as pd
 
     pd.DataFrame({"Time": [1, 2], "Temp": [10, 20]}).to_excel(
         xlsx_file, index=False
@@ -139,8 +140,6 @@ def test_data_manager_read_preview_rows_respects_max_rows(tmp_path):
 
 
 def test_data_manager_read_preview_rows_xlsx(tmp_path):
-    import pandas as pd
-
     xlsx_file = tmp_path / "data.xlsx"
     pd.DataFrame({"A": [1, 2]}).to_excel(xlsx_file, index=False)
 
@@ -150,15 +149,14 @@ def test_data_manager_read_preview_rows_xlsx(tmp_path):
     assert rows[1] == ["1"]
 
 
-def test_data_manager_sheet_update():
+def test_data_manager_clear():
     dm = DataManager()
-    headers = ["A", "B"]
-    data = [["1", "10"], ["2", "20"]]
-
-    dm.update_from_sheet_data(data, headers)
+    dm.set_dataframe(pd.DataFrame({"A": ["1", "2"], "B": ["10", "20"]}))
     assert dm.has_data()
-    assert dm.get_columns() == ["A", "B"]
-    assert len(dm.raw_df) == 2
+
+    dm.clear()
+    assert not dm.has_data()
+    assert dm.get_columns() == []
 
     dm.clear()
     assert not dm.has_data()

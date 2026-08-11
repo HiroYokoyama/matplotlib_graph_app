@@ -31,7 +31,7 @@ from PyQt6.QtWidgets import (
     QDialog,
 )
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QAction, QDropEvent, QDragEnterEvent
+from PyQt6.QtGui import QAction, QDropEvent, QDragEnterEvent, QKeySequence, QUndoStack
 
 import matplotlib
 
@@ -40,9 +40,10 @@ from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg, NavigationToolb
 from matplotlib.figure import Figure
 
 from hygrapher.data_manager import DataManager
-from hygrapher.project_io import save_project_file, load_project_file
+from hygrapher.project_io import save_project_file, load_project_file, reset_to_defaults
 from hygrapher.utils import get_app_version, resolve_cli_file
 from hygrapher.import_dialog import ImportPreviewDialog
+from hygrapher.table_undo import handle_table_item_changed, snapshot_table
 
 VERSION = get_app_version()
 
@@ -50,7 +51,6 @@ VERSION = get_app_version()
 class GraphApp3D(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle(f"Matplotlib 3D Graph App v{VERSION} (PyQt6)")
         self.resize(1300, 850)
         self.setMinimumSize(950, 600)
         self.setAcceptDrops(True)
@@ -59,7 +59,12 @@ class GraphApp3D(QMainWindow):
         self.df = None
         self.current_project_path = None
 
+        self.undo_stack = QUndoStack(self)
+        self.undo_stack.cleanChanged.connect(self.update_window_title)
+        self._table_snapshot = {}
+
         self.init_ui()
+        self.update_window_title()
 
     def init_ui(self):
         # Menu Bar
@@ -81,6 +86,15 @@ class GraphApp3D(QMainWindow):
         export_action = QAction("Export Plot Image...", self)
         export_action.triggered.connect(self.export_graph)
         file_menu.addAction(export_action)
+
+        edit_menu = menu_bar.addMenu("Edit")
+        undo_action = self.undo_stack.createUndoAction(self, "Undo")
+        undo_action.setShortcut(QKeySequence.StandardKey.Undo)
+        edit_menu.addAction(undo_action)
+
+        redo_action = self.undo_stack.createRedoAction(self, "Redo")
+        redo_action.setShortcut(QKeySequence.StandardKey.Redo)
+        edit_menu.addAction(redo_action)
 
         # Central Layout with Splitter
         main_widget = QWidget()
@@ -167,6 +181,7 @@ class GraphApp3D(QMainWindow):
 
         # Data Sheet Table
         self.data_table = QTableWidget()
+        self.data_table.itemChanged.connect(self.on_table_item_changed)
         left_layout.addWidget(self.data_table)
 
         splitter.addWidget(left_panel)
@@ -261,12 +276,22 @@ class GraphApp3D(QMainWindow):
     def populate_data_table(self):
         if self.df is None:
             return
+        self.data_table.blockSignals(True)
         self.data_table.setRowCount(len(self.df))
         self.data_table.setColumnCount(len(self.df.columns))
         self.data_table.setHorizontalHeaderLabels(list(self.df.columns))
         for r in range(len(self.df)):
             for c in range(len(self.df.columns)):
                 self.data_table.setItem(r, c, QTableWidgetItem(str(self.df.iat[r, c])))
+        self.data_table.blockSignals(False)
+
+        self._table_snapshot = snapshot_table(self.data_table)
+        self.undo_stack.clear()
+
+    def on_table_item_changed(self, item):
+        handle_table_item_changed(
+            item, self.data_table, self._table_snapshot, self.undo_stack
+        )
 
     def update_combos(self):
         if self.df is None:
@@ -407,6 +432,8 @@ class GraphApp3D(QMainWindow):
         if file_path:
             save_project_file(self, file_path, version_str=VERSION, dimension="3D")
             self.current_project_path = file_path
+            self.undo_stack.setClean()
+            self.update_window_title()
 
     def overwrite_save(self):
         if not self.current_project_path:
@@ -415,6 +442,8 @@ class GraphApp3D(QMainWindow):
             save_project_file(
                 self, self.current_project_path, version_str=VERSION, dimension="3D"
             )
+            self.undo_stack.setClean()
+            self.update_window_title()
 
     def load_settings(self):
         file_path, _ = QFileDialog.getOpenFileName(
@@ -426,6 +455,8 @@ class GraphApp3D(QMainWindow):
     def load_project_file(self, file_path):
         load_project_file(self, file_path)
         self.current_project_path = file_path
+        self.undo_stack.setClean()
+        self.update_window_title()
 
     def export_graph(self):
         file_path, _ = QFileDialog.getSaveFileName(
@@ -441,15 +472,29 @@ class GraphApp3D(QMainWindow):
         self.data_table.clear()
         self.data_table.setRowCount(0)
         self.data_table.setColumnCount(0)
+        self._table_snapshot = {}
+        self.undo_stack.clear()
+
+        self.x_axis_combo.clear()
+        self.y_axis_combo.clear()
+        self.z_listbox.clear()
+
         self.fig.clear()
         self.ax = self.fig.add_subplot(111, projection="3d")
         self.canvas.draw()
 
     def reset_settings(self):
-        self.plot_type_combo.setCurrentIndex(0)
-        self.elev_spin.setValue(30)
-        self.azim_spin.setValue(-60)
+        reset_to_defaults(self, dimension="3D")
         self.clear_all()
+
+    def update_window_title(self):
+        base = f"HyGrapher 3D v{VERSION}"
+        if self.current_project_path:
+            name = os.path.basename(self.current_project_path)
+            base = f"{name} - {base}"
+        if not self.undo_stack.isClean():
+            base = f"*{base}"
+        self.setWindowTitle(base)
 
 
 def main():

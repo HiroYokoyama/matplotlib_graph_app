@@ -169,27 +169,6 @@ class DataManager:
             print(f"Data filter error: {e}")
             return df_copy
 
-    def update_from_sheet_data(self, data, headers):
-        """
-        Update `_raw_df` from tksheet data rows and headers.
-        """
-        if not data or not headers:
-            return None
-
-        header_len = len(headers)
-        cleaned_data = [
-            row[:header_len]
-            if len(row) >= header_len
-            else row + [""] * (header_len - len(row))
-            for row in data
-        ]
-
-        temp_df = pd.DataFrame(cleaned_data, columns=headers).astype(str)
-        temp_df.replace(r"^\s*$", pd.NA, regex=True, inplace=True)
-        temp_df.dropna(how="all", inplace=True)
-        self._raw_df = temp_df.fillna("")
-        return self._raw_df
-
     def clear(self):
         self._raw_df = None
         self.file_path = ""

@@ -59,8 +59,8 @@ def test_data_manager_complete(tmp_path):
     )
     assert len(f3) == 4
 
-    # Test updating from sheet
-    dm.update_from_sheet_data([["10", "100", "1000"]], ["X", "Y", "Z"])
+    # Test direct dataframe replacement
+    dm.set_dataframe(pd.DataFrame([["10", "100", "1000"]], columns=["X", "Y", "Z"]))
     assert len(dm.raw_df) == 1
     assert list(dm.raw_df["X"]) == ["10"]
 
