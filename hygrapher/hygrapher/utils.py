@@ -2,7 +2,8 @@
 """
 hygrapher.utils
 
-Cross-platform helper utilities for Tkinter GUI events, matplotlib formatting, and font detection.
+Cross-platform helper utilities: CLI argument handling, matplotlib
+formatting, and font detection.
 """
 
 import os
@@ -24,43 +25,6 @@ def resolve_cli_file(argv):
         if os.path.isfile(arg):
             return arg
     return None
-
-
-def bind_scroll_events(widget, callback_func):
-    """
-    Bind mouse wheel scrolling to a widget across Windows, macOS, and Linux.
-
-    Windows / macOS: <MouseWheel> with event.delta
-    Linux (X11): <Button-4> (scroll up) and <Button-5> (scroll down)
-    """
-
-    def _on_mousewheel(event):
-        if hasattr(event, "num") and event.num == 4:
-            # Linux scroll up
-            callback_func(scroll_units=-1, event=event)
-        elif hasattr(event, "num") and event.num == 5:
-            # Linux scroll down
-            callback_func(scroll_units=1, event=event)
-        elif hasattr(event, "delta") and event.delta != 0:
-            # Windows & macOS
-            # On macOS event.delta might be small or negative depending on OS settings
-            units = int(-1 * (event.delta / 120))
-            if units == 0:
-                units = -1 if event.delta > 0 else 1
-            callback_func(scroll_units=units, event=event)
-
-    widget.bind("<MouseWheel>", _on_mousewheel)
-    widget.bind("<Button-4>", _on_mousewheel)
-    widget.bind("<Button-5>", _on_mousewheel)
-
-
-def bind_mousewheel_recursive(widget, callback_func):
-    """
-    Recursively bind scroll events to a widget and all of its children.
-    """
-    bind_scroll_events(widget, callback_func)
-    for child in widget.winfo_children():
-        bind_mousewheel_recursive(child, callback_func)
 
 
 def get_font_list():

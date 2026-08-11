@@ -287,6 +287,19 @@ def test_3d_project_save_load(app3d, tmp_path):
     assert app3d.df is not None
 
 
+def test_3d_load_project_file_tracks_current_path(app3d, tmp_path):
+    """Regression: load_project_file() used to forget to set
+    current_project_path, so overwrite_save() after a load would always
+    prompt Save As instead of silently overwriting the loaded file."""
+    proj_path = tmp_path / "tracked.pmggrp"
+    app3d.current_project_path = str(proj_path)
+    app3d.overwrite_save()
+
+    app3d.current_project_path = None
+    app3d.load_project_file(str(proj_path))
+    assert app3d.current_project_path == str(proj_path)
+
+
 # ── Drag & Drop Tests ─────────────────────────────────────────────────────────
 def test_2d_drop_event_loads_data_file(app2d, sample_csv, auto_accept_import_dialog):
     app2d.df = None

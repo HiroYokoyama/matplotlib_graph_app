@@ -74,6 +74,10 @@ class GraphApp3D(QMainWindow):
         save_action.triggered.connect(self.overwrite_save)
         file_menu.addAction(save_action)
 
+        load_proj_action = QAction("Load 3D Project...", self)
+        load_proj_action.triggered.connect(self.load_settings)
+        file_menu.addAction(load_proj_action)
+
         export_action = QAction("Export Plot Image...", self)
         export_action.triggered.connect(self.export_graph)
         file_menu.addAction(export_action)
@@ -412,8 +416,16 @@ class GraphApp3D(QMainWindow):
                 self, self.current_project_path, version_str=VERSION, dimension="3D"
             )
 
+    def load_settings(self):
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "Open 3D Project", "", "Matplotlib Graph Project (*.pmggrp)"
+        )
+        if file_path:
+            self.load_project_file(file_path)
+
     def load_project_file(self, file_path):
         load_project_file(self, file_path)
+        self.current_project_path = file_path
 
     def export_graph(self):
         file_path, _ = QFileDialog.getSaveFileName(
