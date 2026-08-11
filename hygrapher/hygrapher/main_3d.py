@@ -72,14 +72,17 @@ class GraphApp3D(QMainWindow):
         file_menu = menu_bar.addMenu("File")
 
         open_action = QAction("Open Data File...", self)
+        open_action.setShortcut("Ctrl+O")
         open_action.triggered.connect(self.import_data_interactive)
         file_menu.addAction(open_action)
 
         save_action = QAction("Save 3D Project", self)
+        save_action.setShortcut("Ctrl+S")
         save_action.triggered.connect(self.overwrite_save)
         file_menu.addAction(save_action)
 
         load_proj_action = QAction("Load 3D Project...", self)
+        load_proj_action.setShortcut("Ctrl+L")
         load_proj_action.triggered.connect(self.load_settings)
         file_menu.addAction(load_proj_action)
 
@@ -95,6 +98,11 @@ class GraphApp3D(QMainWindow):
         redo_action = self.undo_stack.createRedoAction(self, "Redo")
         redo_action.setShortcut(QKeySequence.StandardKey.Redo)
         edit_menu.addAction(redo_action)
+
+        help_menu = menu_bar.addMenu("Help")
+        about_action = QAction("About", self)
+        about_action.triggered.connect(self.show_about)
+        help_menu.addAction(about_action)
 
         # Central Layout with Splitter
         main_widget = QWidget()
@@ -122,6 +130,10 @@ class GraphApp3D(QMainWindow):
         )
         self.plot_btn.clicked.connect(self.plot_graph)
         btn_layout.addWidget(self.plot_btn)
+
+        self.reset_btn = QPushButton("Reset All")
+        self.reset_btn.clicked.connect(self.reset_settings)
+        btn_layout.addWidget(self.reset_btn)
 
         left_layout.addLayout(btn_layout)
 
@@ -487,6 +499,27 @@ class GraphApp3D(QMainWindow):
         reset_to_defaults(self, dimension="3D")
         self.clear_all()
 
+    def closeEvent(self, event):
+        if not self.undo_stack.isClean():
+            reply = QMessageBox.question(
+                self,
+                "Unsaved Changes",
+                "You have unsaved changes to the data table. Save before closing?",
+                QMessageBox.StandardButton.Save
+                | QMessageBox.StandardButton.Discard
+                | QMessageBox.StandardButton.Cancel,
+                QMessageBox.StandardButton.Save,
+            )
+            if reply == QMessageBox.StandardButton.Cancel:
+                event.ignore()
+                return
+            if reply == QMessageBox.StandardButton.Save:
+                self.overwrite_save()
+                if not self.undo_stack.isClean():
+                    event.ignore()
+                    return
+        event.accept()
+
     def update_window_title(self):
         base = f"HyGrapher 3D v{VERSION}"
         if self.current_project_path:
@@ -495,6 +528,14 @@ class GraphApp3D(QMainWindow):
         if not self.undo_stack.isClean():
             base = f"*{base}"
         self.setWindowTitle(base)
+
+    def show_about(self):
+        QMessageBox.about(
+            self,
+            "About HyGrapher",
+            f"HyGrapher 3D v{VERSION}\n"
+            "A cross-platform Matplotlib GUI application built with PyQt6.",
+        )
 
 
 def main():

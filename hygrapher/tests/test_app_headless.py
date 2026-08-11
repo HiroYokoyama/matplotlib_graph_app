@@ -11,7 +11,8 @@ import pytest
 from unittest.mock import MagicMock
 
 from PyQt6.QtCore import QUrl
-from PyQt6.QtWidgets import QApplication, QDialog
+from PyQt6.QtGui import QCloseEvent
+from PyQt6.QtWidgets import QApplication, QDialog, QMessageBox
 import matplotlib
 
 matplotlib.use("Agg")
@@ -486,6 +487,137 @@ def test_3d_window_title_updates_on_project_save_and_load(tmp_path):
         QApplication.processEvents()
 
 
+# ── Unsaved-Changes-on-Close Tests ──────────────────────────────────────────
+def test_2d_close_with_no_unsaved_changes_closes_immediately(sample_csv):
+    app = GraphApp2D()
+    try:
+        app.load_data(file_path=sample_csv)
+        assert app.undo_stack.isClean()
+
+        event = QCloseEvent()
+        app.closeEvent(event)
+        assert event.isAccepted()
+    finally:
+        app.deleteLater()
+        QApplication.processEvents()
+
+
+def test_2d_close_with_unsaved_changes_cancel_keeps_window_open(
+    sample_csv, monkeypatch
+):
+    app = GraphApp2D()
+    try:
+        app.load_data(file_path=sample_csv)
+        app.data_table.item(0, 0).setText("edited")
+        assert not app.undo_stack.isClean()
+
+        monkeypatch.setattr(
+            QMessageBox,
+            "question",
+            lambda *a, **k: QMessageBox.StandardButton.Cancel,
+        )
+        event = QCloseEvent()
+        app.closeEvent(event)
+        assert not event.isAccepted()
+    finally:
+        app.deleteLater()
+        QApplication.processEvents()
+
+
+def test_2d_close_with_unsaved_changes_discard_closes(sample_csv, monkeypatch):
+    app = GraphApp2D()
+    try:
+        app.load_data(file_path=sample_csv)
+        app.data_table.item(0, 0).setText("edited")
+
+        monkeypatch.setattr(
+            QMessageBox,
+            "question",
+            lambda *a, **k: QMessageBox.StandardButton.Discard,
+        )
+        event = QCloseEvent()
+        app.closeEvent(event)
+        assert event.isAccepted()
+    finally:
+        app.deleteLater()
+        QApplication.processEvents()
+
+
+def test_2d_close_with_unsaved_changes_save_then_closes(
+    sample_csv, tmp_path, monkeypatch
+):
+    app = GraphApp2D()
+    try:
+        app.load_data(file_path=sample_csv)
+        app.data_table.item(0, 0).setText("edited")
+        app.current_project_path = str(tmp_path / "autosave.pmggrp")
+
+        monkeypatch.setattr(
+            QMessageBox, "question", lambda *a, **k: QMessageBox.StandardButton.Save
+        )
+        event = QCloseEvent()
+        app.closeEvent(event)
+        assert event.isAccepted()
+        assert (tmp_path / "autosave.pmggrp").exists()
+    finally:
+        app.deleteLater()
+        QApplication.processEvents()
+
+
+def test_3d_close_with_unsaved_changes_cancel_keeps_window_open(
+    sample_csv, monkeypatch
+):
+    app = GraphApp3D()
+    try:
+        app.load_data(file_path=sample_csv)
+        app.data_table.item(0, 0).setText("edited")
+        assert not app.undo_stack.isClean()
+
+        monkeypatch.setattr(
+            QMessageBox,
+            "question",
+            lambda *a, **k: QMessageBox.StandardButton.Cancel,
+        )
+        event = QCloseEvent()
+        app.closeEvent(event)
+        assert not event.isAccepted()
+    finally:
+        app.deleteLater()
+        QApplication.processEvents()
+
+
+# ── 2D → 3D Mode Switch Tests ────────────────────────────────────────────────
+def test_open_in_3d_mode_carries_over_loaded_data(sample_csv):
+    app = GraphApp2D()
+    try:
+        app.load_data(file_path=sample_csv)
+        app.open_in_3d_mode()
+        try:
+            assert app.win_3d.df is not None
+            assert list(app.win_3d.df.columns) == list(app.df.columns)
+            assert app.win_3d.data_table.rowCount() == app.data_table.rowCount()
+        finally:
+            app.win_3d.deleteLater()
+    finally:
+        app.deleteLater()
+        QApplication.processEvents()
+
+
+# ── Reset Button Wiring Tests ────────────────────────────────────────────────
+def test_3d_reset_btn_is_wired_to_reset_settings(app3d, sample_csv):
+    app3d.elev_spin.setValue(99)
+    app3d.reset_btn.click()
+    assert app3d.elev_spin.value() == 30
+
+    # app3d is a module-scoped fixture; reload data so later tests in this
+    # module that expect it to already have data keep working.
+    app3d.load_data(file_path=sample_csv)
+    if app3d.z_listbox.count() >= 3:
+        app3d.x_axis_combo.setCurrentIndex(0)
+        app3d.y_axis_combo.setCurrentIndex(1)
+        app3d.z_listbox.item(2).setSelected(True)
+
+
 # ── Minor Tick Tests ─────────────────────────────────────────────────────────
 def test_2d_minor_tick_interval_applies(app2d):
     import matplotlib.ticker as mticker
@@ -557,3 +689,9 @@ def test_3d_reset_and_clear(app3d):
     assert app3d.title_input.text() == ""
     assert app3d.colormap_combo.currentText() == "viridis"
     assert app3d.df is None
+
+
+def test_3d_show_about_does_not_crash(app3d):
+    # QMessageBox.about is mocked globally (conftest.mock_qt_dialogs); this
+    # just guards that the 3D window has an About action wired up at all.
+    app3d.show_about()

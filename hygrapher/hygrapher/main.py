@@ -37,7 +37,14 @@ from PyQt6.QtWidgets import (
     QDialog,
 )
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QAction, QDropEvent, QDragEnterEvent, QKeySequence, QUndoStack
+from PyQt6.QtGui import (
+    QAction,
+    QColor,
+    QDropEvent,
+    QDragEnterEvent,
+    QKeySequence,
+    QUndoStack,
+)
 
 import matplotlib
 
@@ -835,7 +842,9 @@ class GraphApp(QMainWindow):
         self.style_label_input.setText(style.get("label", ""))
 
     def on_style_editor_color_pick(self):
-        color = QColorDialog.getColor()
+        current = self.style_color_input.text()
+        initial = QColor(current) if current and current != "Auto" else QColor("white")
+        color = QColorDialog.getColor(initial, self, "Choose Series Color")
         if color.isValid():
             self.style_color_input.setText(color.name())
             self.on_style_editor_change()
@@ -1505,9 +1514,36 @@ class GraphApp(QMainWindow):
             from hygrapher.main_3d import GraphApp3D
 
             self.win_3d = GraphApp3D()
+            if self.df is not None:
+                self.win_3d.data_mgr.set_dataframe(self.df.copy())
+                self.win_3d.df = self.win_3d.data_mgr.get_filtered_df()
+                self.win_3d.populate_data_table()
+                self.win_3d.update_combos()
             self.win_3d.show()
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to open 3D Mode:\n{e}")
+
+    def closeEvent(self, event):
+        if not self.undo_stack.isClean():
+            reply = QMessageBox.question(
+                self,
+                "Unsaved Changes",
+                "You have unsaved changes to the data table. Save before closing?",
+                QMessageBox.StandardButton.Save
+                | QMessageBox.StandardButton.Discard
+                | QMessageBox.StandardButton.Cancel,
+                QMessageBox.StandardButton.Save,
+            )
+            if reply == QMessageBox.StandardButton.Cancel:
+                event.ignore()
+                return
+            if reply == QMessageBox.StandardButton.Save:
+                self.overwrite_save()
+                if not self.undo_stack.isClean():
+                    # Save As was cancelled by the user — don't close.
+                    event.ignore()
+                    return
+        event.accept()
 
     def update_window_title(self):
         base = f"HyGrapher v{VERSION}"
