@@ -29,6 +29,8 @@ from PyQt6.QtWidgets import (
     QFormLayout,
     QSizePolicy,
     QDialog,
+    QMenu,
+    QInputDialog,
 )
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QAction, QDropEvent, QDragEnterEvent, QKeySequence, QUndoStack
@@ -43,7 +45,14 @@ from hygrapher.data_manager import DataManager
 from hygrapher.project_io import save_project_file, load_project_file, reset_to_defaults
 from hygrapher.utils import get_app_version, resolve_cli_file
 from hygrapher.import_dialog import ImportPreviewDialog
-from hygrapher.table_undo import handle_table_item_changed, snapshot_table
+from hygrapher.table_undo import (
+    DeleteColumnCommand,
+    DeleteRowCommand,
+    InsertColumnCommand,
+    InsertRowCommand,
+    handle_table_item_changed,
+    snapshot_table,
+)
 
 VERSION = get_app_version()
 
@@ -194,6 +203,10 @@ class GraphApp3D(QMainWindow):
         # Data Sheet Table
         self.data_table = QTableWidget()
         self.data_table.itemChanged.connect(self.on_table_item_changed)
+        self.data_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.data_table.customContextMenuRequested.connect(
+            self.show_table_context_menu
+        )
         left_layout.addWidget(self.data_table)
 
         splitter.addWidget(left_panel)
@@ -304,6 +317,114 @@ class GraphApp3D(QMainWindow):
         handle_table_item_changed(
             item, self.data_table, self._table_snapshot, self.undo_stack
         )
+
+    # ── Row/Column Insert & Delete (undoable) ────────────────────────────────
+    def show_table_context_menu(self, pos):
+        if self.data_table.columnCount() == 0:
+            return
+        menu = QMenu(self)
+        menu.addAction("Insert Row Above", self.insert_row_above)
+        menu.addAction("Insert Row Below", self.insert_row_below)
+        menu.addAction("Delete Row", self.delete_selected_row)
+        menu.addSeparator()
+        menu.addAction("Insert Column Left", self.insert_column_left)
+        menu.addAction("Insert Column Right", self.insert_column_right)
+        menu.addAction("Delete Column", self.delete_selected_column)
+        menu.exec(self.data_table.viewport().mapToGlobal(pos))
+
+    def insert_row_above(self):
+        row = self.data_table.currentRow()
+        self._insert_row(row if row >= 0 else 0)
+
+    def insert_row_below(self):
+        row = self.data_table.currentRow()
+        self._insert_row(row + 1 if row >= 0 else self.data_table.rowCount())
+
+    def _insert_row(self, row):
+        if self.data_table.columnCount() == 0:
+            return
+        cmd = InsertRowCommand(
+            self.data_table,
+            self._table_snapshot,
+            row,
+            self.data_table.columnCount(),
+            on_changed=self.get_data_from_table,
+        )
+        self.undo_stack.push(cmd)
+
+    def delete_selected_row(self):
+        row = self.data_table.currentRow()
+        if row < 0:
+            return
+        if self.data_table.rowCount() <= 1:
+            QMessageBox.warning(self, "Warning", "Cannot delete the last row.")
+            return
+        row_data = [
+            self.data_table.item(row, c).text() if self.data_table.item(row, c) else ""
+            for c in range(self.data_table.columnCount())
+        ]
+        cmd = DeleteRowCommand(
+            self.data_table,
+            self._table_snapshot,
+            row,
+            row_data,
+            on_changed=self.get_data_from_table,
+        )
+        self.undo_stack.push(cmd)
+
+    def insert_column_left(self):
+        col = self.data_table.currentColumn()
+        self._insert_column(col if col >= 0 else 0)
+
+    def insert_column_right(self):
+        col = self.data_table.currentColumn()
+        self._insert_column(col + 1 if col >= 0 else self.data_table.columnCount())
+
+    def _insert_column(self, col):
+        if self.data_table.rowCount() == 0:
+            return
+        default_name = f"Column{self.data_table.columnCount() + 1}"
+        name, ok = QInputDialog.getText(
+            self, "Insert Column", "Column name:", text=default_name
+        )
+        if not ok:
+            return
+        cmd = InsertColumnCommand(
+            self.data_table,
+            self._table_snapshot,
+            col,
+            name.strip() or default_name,
+            self.data_table.rowCount(),
+            on_changed=self._sync_after_column_structure_change,
+        )
+        self.undo_stack.push(cmd)
+
+    def delete_selected_column(self):
+        col = self.data_table.currentColumn()
+        if col < 0:
+            return
+        if self.data_table.columnCount() <= 1:
+            QMessageBox.warning(self, "Warning", "Cannot delete the last column.")
+            return
+        header_item = self.data_table.horizontalHeaderItem(col)
+        header_text = header_item.text() if header_item else f"Column{col + 1}"
+        col_data = [
+            self.data_table.item(r, col).text() if self.data_table.item(r, col) else ""
+            for r in range(self.data_table.rowCount())
+        ]
+        cmd = DeleteColumnCommand(
+            self.data_table,
+            self._table_snapshot,
+            col,
+            header_text,
+            col_data,
+            on_changed=self._sync_after_column_structure_change,
+        )
+        self.undo_stack.push(cmd)
+
+    def _sync_after_column_structure_change(self):
+        self.get_data_from_table()
+        self.update_combos()
 
     def update_combos(self):
         if self.df is None:

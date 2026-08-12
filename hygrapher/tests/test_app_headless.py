@@ -12,7 +12,7 @@ from unittest.mock import MagicMock
 
 from PyQt6.QtCore import QUrl
 from PyQt6.QtGui import QCloseEvent
-from PyQt6.QtWidgets import QApplication, QDialog, QMessageBox
+from PyQt6.QtWidgets import QApplication, QDialog, QInputDialog, QMessageBox
 import matplotlib
 
 matplotlib.use("Agg")
@@ -247,6 +247,185 @@ def test_2d_table_editing(app2d):
     item.setText("999")
     app2d.get_data_from_table()
     assert app2d.df.iat[0, 1] == "999"
+
+
+# ── Row/Column Insert & Delete Tests ─────────────────────────────────────────
+def test_2d_insert_and_delete_row_is_undoable(sample_csv):
+    app = GraphApp2D()
+    try:
+        app.load_data(file_path=sample_csv)
+        original_rows = app.data_table.rowCount()
+
+        app.data_table.setCurrentCell(1, 0)
+        app.insert_row_above()
+        assert app.data_table.rowCount() == original_rows + 1
+        assert len(app.df) == original_rows + 1
+
+        app.undo_stack.undo()
+        assert app.data_table.rowCount() == original_rows
+        assert len(app.df) == original_rows
+
+        app.data_table.setCurrentCell(0, 0)
+        app.delete_selected_row()
+        assert app.data_table.rowCount() == original_rows - 1
+
+        app.undo_stack.undo()
+        assert app.data_table.rowCount() == original_rows
+    finally:
+        app.deleteLater()
+        QApplication.processEvents()
+
+
+def test_2d_cannot_delete_last_row(sample_csv, monkeypatch):
+    app = GraphApp2D()
+    try:
+        app.load_data(file_path=sample_csv)
+        warned = []
+        monkeypatch.setattr(QMessageBox, "warning", lambda *a, **k: warned.append(1))
+
+        while app.data_table.rowCount() > 1:
+            app.data_table.setCurrentCell(0, 0)
+            app.delete_selected_row()
+        app.data_table.setCurrentCell(0, 0)
+        app.delete_selected_row()
+
+        assert app.data_table.rowCount() == 1
+        assert warned
+    finally:
+        app.deleteLater()
+        QApplication.processEvents()
+
+
+def test_2d_insert_and_delete_column_is_undoable(sample_csv, monkeypatch):
+    app = GraphApp2D()
+    try:
+        app.load_data(file_path=sample_csv)
+        original_cols = app.data_table.columnCount()
+
+        monkeypatch.setattr(
+            QInputDialog, "getText", staticmethod(lambda *a, **k: ("NewCol", True))
+        )
+        app.data_table.setCurrentCell(0, 0)
+        app.insert_column_left()
+        assert app.data_table.columnCount() == original_cols + 1
+        assert "NewCol" in app.df.columns
+        x_combo = app.x_tab_widgets[0]["x_combo"]
+        assert "NewCol" in [x_combo.itemText(i) for i in range(x_combo.count())]
+
+        app.undo_stack.undo()
+        assert app.data_table.columnCount() == original_cols
+        assert "NewCol" not in app.df.columns
+
+        app.data_table.setCurrentCell(0, 1)
+        app.delete_selected_column()
+        assert app.data_table.columnCount() == original_cols - 1
+
+        app.undo_stack.undo()
+        assert app.data_table.columnCount() == original_cols
+    finally:
+        app.deleteLater()
+        QApplication.processEvents()
+
+
+def test_2d_insert_column_cancelled_dialog_does_nothing(sample_csv, monkeypatch):
+    app = GraphApp2D()
+    try:
+        app.load_data(file_path=sample_csv)
+        original_cols = app.data_table.columnCount()
+        monkeypatch.setattr(
+            QInputDialog, "getText", staticmethod(lambda *a, **k: ("", False))
+        )
+        app.data_table.setCurrentCell(0, 0)
+        app.insert_column_left()
+        assert app.data_table.columnCount() == original_cols
+    finally:
+        app.deleteLater()
+        QApplication.processEvents()
+
+
+def test_2d_cannot_delete_last_column(sample_csv, monkeypatch):
+    app = GraphApp2D()
+    try:
+        app.load_data(file_path=sample_csv)
+        warned = []
+        monkeypatch.setattr(QMessageBox, "warning", lambda *a, **k: warned.append(1))
+
+        while app.data_table.columnCount() > 1:
+            app.data_table.setCurrentCell(0, 0)
+            app.delete_selected_column()
+        app.data_table.setCurrentCell(0, 0)
+        app.delete_selected_column()
+
+        assert app.data_table.columnCount() == 1
+        assert warned
+    finally:
+        app.deleteLater()
+        QApplication.processEvents()
+
+
+def test_2d_table_context_menu_noop_without_data():
+    app = GraphApp2D()
+    try:
+        # No columns yet: must return before menu.exec() (which would
+        # otherwise block on a real modal event loop in a headless test).
+        app.show_table_context_menu(app.data_table.rect().center())
+    finally:
+        app.deleteLater()
+        QApplication.processEvents()
+
+
+def test_3d_insert_and_delete_row_is_undoable(sample_csv):
+    app = GraphApp3D()
+    try:
+        app.load_data(file_path=sample_csv)
+        original_rows = app.data_table.rowCount()
+
+        app.data_table.setCurrentCell(1, 0)
+        app.insert_row_above()
+        assert app.data_table.rowCount() == original_rows + 1
+
+        app.undo_stack.undo()
+        assert app.data_table.rowCount() == original_rows
+
+        app.data_table.setCurrentCell(0, 0)
+        app.delete_selected_row()
+        assert app.data_table.rowCount() == original_rows - 1
+
+        app.undo_stack.undo()
+        assert app.data_table.rowCount() == original_rows
+    finally:
+        app.deleteLater()
+        QApplication.processEvents()
+
+
+def test_3d_insert_and_delete_column_is_undoable(sample_csv, monkeypatch):
+    app = GraphApp3D()
+    try:
+        app.load_data(file_path=sample_csv)
+        original_cols = app.data_table.columnCount()
+
+        monkeypatch.setattr(
+            QInputDialog, "getText", staticmethod(lambda *a, **k: ("NewCol", True))
+        )
+        app.data_table.setCurrentCell(0, 0)
+        app.insert_column_left()
+        assert app.data_table.columnCount() == original_cols + 1
+        assert "NewCol" in [
+            app.x_axis_combo.itemText(i) for i in range(app.x_axis_combo.count())
+        ]
+
+        app.undo_stack.undo()
+        assert app.data_table.columnCount() == original_cols
+
+        app.data_table.setCurrentCell(0, 1)
+        app.delete_selected_column()
+        assert app.data_table.columnCount() == original_cols - 1
+
+        app.undo_stack.undo()
+        assert app.data_table.columnCount() == original_cols
+    finally:
+        app.deleteLater()
+        QApplication.processEvents()
 
 
 # ── Project File I/O Tests ────────────────────────────────────────────────────
