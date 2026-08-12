@@ -343,6 +343,33 @@ def test_2d_insert_column_cancelled_dialog_does_nothing(sample_csv, monkeypatch)
         QApplication.processEvents()
 
 
+def test_2d_insert_column_duplicate_name_rejected(sample_csv, monkeypatch):
+    """A duplicate column name would make df[col] return a DataFrame
+    instead of a Series, crashing plot_graph() with AttributeError on
+    .str; must be rejected instead of silently corrupting the data."""
+    app = GraphApp2D()
+    try:
+        app.load_data(file_path=sample_csv)
+        original_cols = app.data_table.columnCount()
+        existing_name = app.data_table.horizontalHeaderItem(0).text()
+
+        warned = []
+        monkeypatch.setattr(QMessageBox, "warning", lambda *a, **k: warned.append(1))
+        monkeypatch.setattr(
+            QInputDialog,
+            "getText",
+            staticmethod(lambda *a, **k: (existing_name, True)),
+        )
+        app.data_table.setCurrentCell(0, 0)
+        app.insert_column_left()
+
+        assert app.data_table.columnCount() == original_cols
+        assert warned
+    finally:
+        app.deleteLater()
+        QApplication.processEvents()
+
+
 def test_2d_cannot_delete_last_column(sample_csv, monkeypatch):
     app = GraphApp2D()
     try:
@@ -423,6 +450,30 @@ def test_3d_insert_and_delete_column_is_undoable(sample_csv, monkeypatch):
 
         app.undo_stack.undo()
         assert app.data_table.columnCount() == original_cols
+    finally:
+        app.deleteLater()
+        QApplication.processEvents()
+
+
+def test_3d_insert_column_duplicate_name_rejected(sample_csv, monkeypatch):
+    app = GraphApp3D()
+    try:
+        app.load_data(file_path=sample_csv)
+        original_cols = app.data_table.columnCount()
+        existing_name = app.data_table.horizontalHeaderItem(0).text()
+
+        warned = []
+        monkeypatch.setattr(QMessageBox, "warning", lambda *a, **k: warned.append(1))
+        monkeypatch.setattr(
+            QInputDialog,
+            "getText",
+            staticmethod(lambda *a, **k: (existing_name, True)),
+        )
+        app.data_table.setCurrentCell(0, 0)
+        app.insert_column_left()
+
+        assert app.data_table.columnCount() == original_cols
+        assert warned
     finally:
         app.deleteLater()
         QApplication.processEvents()

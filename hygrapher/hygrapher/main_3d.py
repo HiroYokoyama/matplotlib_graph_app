@@ -389,11 +389,26 @@ class GraphApp3D(QMainWindow):
         )
         if not ok:
             return
+        name = name.strip() or default_name
+
+        existing = {
+            self.data_table.horizontalHeaderItem(c).text()
+            for c in range(self.data_table.columnCount())
+            if self.data_table.horizontalHeaderItem(c)
+        }
+        if name in existing:
+            QMessageBox.warning(
+                self,
+                "Duplicate Column Name",
+                f"A column named '{name}' already exists. Choose a different name.",
+            )
+            return
+
         cmd = InsertColumnCommand(
             self.data_table,
             self._table_snapshot,
             col,
-            name.strip() or default_name,
+            name,
             self.data_table.rowCount(),
             on_changed=self._sync_after_column_structure_change,
         )
