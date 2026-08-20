@@ -22,8 +22,6 @@ from PyQt6.QtWidgets import (
     QComboBox,
     QLineEdit,
     QSpinBox,
-    QListWidget,
-    QAbstractItemView,
     QFileDialog,
     QMessageBox,
     QFormLayout,
@@ -45,6 +43,7 @@ from hygrapher.data_manager import DataManager
 from hygrapher.project_io import save_project_file, load_project_file, reset_to_defaults
 from hygrapher.utils import get_app_version, resolve_cli_file
 from hygrapher.import_dialog import ImportPreviewDialog
+from hygrapher.widgets import build_series_picker, wrap_in_scroll_area
 from hygrapher.table_undo import (
     DeleteColumnCommand,
     DeleteRowCommand,
@@ -161,9 +160,8 @@ class GraphApp3D(QMainWindow):
         self.y_axis_combo = QComboBox()
         form.addRow("Y Axis:", self.y_axis_combo)
 
-        self.z_listbox = QListWidget()
-        self.z_listbox.setSelectionMode(QAbstractItemView.SelectionMode.MultiSelection)
-        form.addRow("Z Column(s):", self.z_listbox)
+        z_box, self.z_listbox = build_series_picker("")
+        form.addRow("Z Column(s):", z_box)
 
         self.title_input = QLineEdit()
         form.addRow("Title:", self.title_input)
@@ -198,7 +196,9 @@ class GraphApp3D(QMainWindow):
         )
         form.addRow("Colormap:", self.colormap_combo)
 
-        left_layout.addLayout(form)
+        form_host = QWidget()
+        form_host.setLayout(form)
+        left_layout.addWidget(wrap_in_scroll_area(form_host), stretch=3)
 
         # Data Sheet Table
         self.data_table = QTableWidget()
@@ -207,7 +207,7 @@ class GraphApp3D(QMainWindow):
         self.data_table.customContextMenuRequested.connect(
             self.show_table_context_menu
         )
-        left_layout.addWidget(self.data_table)
+        left_layout.addWidget(self.data_table, stretch=2)
 
         splitter.addWidget(left_panel)
 
@@ -225,6 +225,8 @@ class GraphApp3D(QMainWindow):
         )
         self.canvas.setMinimumSize(300, 250)
         self.toolbar = NavigationToolbar2QT(self.canvas, self)
+        self.canvas.mpl_connect("button_press_event", self.on_canvas_click)
+        self.canvas.setToolTip("Double-click the plot to reset the view")
 
         right_layout.addWidget(self.toolbar)
         right_layout.addWidget(self.canvas, stretch=1)
@@ -233,6 +235,15 @@ class GraphApp3D(QMainWindow):
         splitter.setStretchFactor(0, 0)
         splitter.setStretchFactor(1, 1)
         splitter.setSizes([420, 880])
+
+    def on_canvas_click(self, event):
+        """Double-click the 3D plot to return to the configured viewing angle."""
+        if not getattr(event, "dblclick", False):
+            return
+        self.toolbar.home()
+        self.ax.view_init(elev=self.elev_spin.value(), azim=self.azim_spin.value())
+        self.ax.set_box_aspect(None, zoom=1)
+        self.canvas.draw_idle()
 
     def dragEnterEvent(self, event: QDragEnterEvent):
         if event.mimeData().hasUrls():

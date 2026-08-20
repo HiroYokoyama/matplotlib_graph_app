@@ -27,8 +27,6 @@ from PyQt6.QtWidgets import (
     QSpinBox,
     QDoubleSpinBox,
     QGroupBox,
-    QListWidget,
-    QAbstractItemView,
     QFileDialog,
     QMessageBox,
     QColorDialog,
@@ -64,6 +62,7 @@ from hygrapher.utils import (
     resolve_cli_file,
 )
 from hygrapher.import_dialog import ImportPreviewDialog
+from hygrapher.widgets import build_series_picker, wrap_in_scroll_area
 from hygrapher.table_undo import (
     DeleteColumnCommand,
     DeleteRowCommand,
@@ -229,6 +228,8 @@ class GraphApp(QMainWindow):
         )
         self.canvas.setMinimumSize(300, 250)
         self.toolbar = NavigationToolbar2QT(self.canvas, self)
+        self.canvas.mpl_connect("button_press_event", self.on_canvas_click)
+        self.canvas.setToolTip("Double-click the plot to reset the zoom/pan view")
 
         right_layout.addWidget(self.toolbar)
         right_layout.addWidget(self.canvas, stretch=1)
@@ -237,6 +238,18 @@ class GraphApp(QMainWindow):
         splitter.setStretchFactor(0, 0)
         splitter.setStretchFactor(1, 1)
         splitter.setSizes([480, 920])
+
+    def on_canvas_click(self, event):
+        """Double-click anywhere on the plot to go back to the un-zoomed view."""
+        if not getattr(event, "dblclick", False):
+            return
+        if self.data_mgr.has_data():
+            # a full redraw restores the configured axis limits, which
+            # autoscaling or the toolbar's home view would not respect
+            self.toolbar.update()
+            self.plot_graph()
+            return
+        self.toolbar.home()
 
     def create_basic_settings_tab(self):
         tab = QWidget()
@@ -312,7 +325,7 @@ class GraphApp(QMainWindow):
         opt_layout.addWidget(self.subplot_mode_check)
         layout.addWidget(opt_group)
 
-        self.settings_notebook.addTab(tab, "Basic")
+        self.settings_notebook.addTab(wrap_in_scroll_area(tab), "Basic")
 
     def add_x_tab(self, is_initial=False):
         tab_index = len(self.x_tab_widgets) + 1
@@ -328,21 +341,13 @@ class GraphApp(QMainWindow):
         x_layout.addWidget(x_combo)
         layout.addLayout(x_layout)
 
-        # Y1 and Y2 Column Pickers
-        y_layout = QHBoxLayout()
+        # Y1 and Y2 Column Pickers, stacked so each gets the panel's full width
+        y_layout = QVBoxLayout()
 
-        y1_box = QGroupBox("Y1 Series (Left)")
-        y1_box_layout = QVBoxLayout(y1_box)
-        y1_list = QListWidget()
-        y1_list.setSelectionMode(QAbstractItemView.SelectionMode.MultiSelection)
-        y1_box_layout.addWidget(y1_list)
+        y1_box, y1_list = build_series_picker("Y1 Series (Left)")
         y_layout.addWidget(y1_box)
 
-        y2_box = QGroupBox("Y2 Series (Right)")
-        y2_box_layout = QVBoxLayout(y2_box)
-        y2_list = QListWidget()
-        y2_list.setSelectionMode(QAbstractItemView.SelectionMode.MultiSelection)
-        y2_box_layout.addWidget(y2_list)
+        y2_box, y2_list = build_series_picker("Y2 Series (Right)")
         y_layout.addWidget(y2_box)
 
         layout.addLayout(y_layout)
@@ -359,6 +364,8 @@ class GraphApp(QMainWindow):
             "x_combo": x_combo,
             "y1_listbox": y1_list,
             "y2_listbox": y2_list,
+            "y1_box": y1_box,
+            "y2_box": y2_box,
         }
         self.x_tab_widgets.append(tab_info)
 
@@ -446,7 +453,7 @@ class GraphApp(QMainWindow):
         apply_btn.clicked.connect(self.on_style_editor_change)
         layout.addWidget(apply_btn)
 
-        self.settings_notebook.addTab(tab, "Styles")
+        self.settings_notebook.addTab(wrap_in_scroll_area(tab), "Styles")
 
     def create_axis_ticks_tab(self):
         tab = QWidget()
@@ -501,7 +508,7 @@ class GraphApp(QMainWindow):
         layout.addRow(self.yaxis1_plain_check)
         layout.addRow(self.yaxis2_plain_check)
 
-        self.settings_notebook.addTab(tab, "Axis Limits & Ticks")
+        self.settings_notebook.addTab(wrap_in_scroll_area(tab), "Axis Limits & Ticks")
 
     def create_font_size_tab(self):
         tab = QWidget()
@@ -539,7 +546,7 @@ class GraphApp(QMainWindow):
         self.legend_fontsize_spin.setValue(10)
         layout.addRow("Legend Font Size:", self.legend_fontsize_spin)
 
-        self.settings_notebook.addTab(tab, "Fonts & Sizes")
+        self.settings_notebook.addTab(wrap_in_scroll_area(tab), "Fonts & Sizes")
 
     def create_spines_tab(self):
         tab = QWidget()
@@ -559,7 +566,7 @@ class GraphApp(QMainWindow):
         layout.addWidget(self.spine_left_check)
         layout.addWidget(self.spine_right_check)
 
-        self.settings_notebook.addTab(tab, "Spines")
+        self.settings_notebook.addTab(wrap_in_scroll_area(tab), "Spines")
 
     def create_legend_tab(self):
         tab = QWidget()
@@ -587,7 +594,7 @@ class GraphApp(QMainWindow):
         )
         layout.addRow("Legend Position:", self.legend_loc_combo)
 
-        self.settings_notebook.addTab(tab, "Legend")
+        self.settings_notebook.addTab(wrap_in_scroll_area(tab), "Legend")
 
     def create_advanced_tab(self):
         tab = QWidget()
@@ -655,7 +662,7 @@ class GraphApp(QMainWindow):
         self.grid_linewidth_spin.setValue(0.5)
         layout.addRow("Grid Line Width:", self.grid_linewidth_spin)
 
-        self.settings_notebook.addTab(tab, "Advanced")
+        self.settings_notebook.addTab(wrap_in_scroll_area(tab), "Advanced")
 
     # ── Drag and Drop Event Handlers ──────────────────────────────────────────
     def dragEnterEvent(self, event: QDragEnterEvent):

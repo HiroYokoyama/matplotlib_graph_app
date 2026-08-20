@@ -24,6 +24,9 @@ A high-performance, cross-platform desktop application for plotting, visual edit
   - High-DPI Image Export (72 to 1200 DPI PNG, PDF, SVG).
   - Legend font size, location, and spine toggle controls.
   - Moving Average Line Smoothing, Error Bars, and Data Point Value Annotations.
+- **Fast Series Selection**: Y1/Y2 (and 3D Z) column pickers with Select All / Clear buttons, a live selection counter, and lists tall enough to browse without hunting.
+- **Scrollable Settings Panel**: Every settings tab scrolls, so no control is ever cut off on a small window.
+- **Double-Click to Reset Zoom**: Double-click the plot to drop any zoom/pan and redraw at the configured axis limits.
 - **Project Serialization**: Save and restore complete workspace states including all dataset modifications and multi-X-tab configurations using `.pmggrp` JSON project files.
 - **Native Drag & Drop**: Drag CSV, TSV, Excel (`.xlsx`/`.xls`), JSON, or project (`.pmggrp`) files directly into the window to open.
 
@@ -90,10 +93,12 @@ matplotlib_graph_app/
 │   │   ├── main_3d.py         # 3D Application main window (mplot3d & QMainWindow)
 │   │   ├── data_manager.py    # Non-destructive data storage & range filter engine
 │   │   ├── project_io.py      # .pmggrp JSON project serialization & deserialization
+│   │   ├── widgets.py         # Shared Qt building blocks (series picker, scroll wrapper)
 │   │   └── utils.py           # Cross-platform ticker math & font manager helpers
 │   └── tests/
 │       ├── conftest.py        # Pytest configuration & offscreen Qt setup
 │       ├── test_app_headless.py # 38 fine-grained PyQt6 application tests
+│       ├── test_series_picker_ui.py # Series picker, scrolling & zoom-reset tests
 │       ├── test_data_manager.py
 │       ├── test_project_io.py
 │       ├── test_unit_comprehensive.py
